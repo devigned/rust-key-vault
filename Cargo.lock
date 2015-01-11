@@ -1,0 +1,4 @@
+[root]
+name = "azure-key-vault"
+version = "0.0.1"
+

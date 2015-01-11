@@ -1,0 +1,25 @@
+[package]
+
+name = "azure-key-vault"
+version = "0.0.1"
+authors = ["David Justice <david@devigned.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/devigned/rust-azure-key-vault.git"
+description = "Azure Key Vault client for Rust"
+
+[lib]
+name = "azure-key-vault"
+path = "src/vault/lib.rs"
+
+[[bin]]
+name = "azure-key-vault"
+test = false
+doc = false
+
+[[test]]
+name = "tests"
+
+[[bench]]
+name = "tests"
+path = "tests/tests.rs"
