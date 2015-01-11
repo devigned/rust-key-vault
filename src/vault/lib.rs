@@ -1,1 +1,1 @@
-
+#![crate_name="vault"]

@@ -1,6 +1,6 @@
 [package]
 
-name = "azure-key-vault"
+name = "vault"
 version = "0.0.1"
 authors = ["David Justice <david@devigned.com>"]
 license = "MIT"
@@ -9,11 +9,14 @@ repository = "https://github.com/devigned/rust-azure-key-vault.git"
 description = "Azure Key Vault client for Rust"
 
 [lib]
-name = "azure-key-vault"
+name = "vault"
 path = "src/vault/lib.rs"
 
+[dependencies]
+log = "0.1"
+
 [[bin]]
-name = "azure-key-vault"
+name = "vault"
 test = false
 doc = false
 
