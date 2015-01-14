@@ -1,3 +1,6 @@
+#[macro_use] extern crate log;
+#[macro_use] extern crate vault;
+
 fn main() {
-  println!("Hello world!")
+  vault::connect("hello", "world");
 }

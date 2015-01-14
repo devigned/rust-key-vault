@@ -13,7 +13,13 @@ name = "vault"
 path = "src/vault/lib.rs"
 
 [dependencies]
-log = "0.1"
+log = "*"
+
+[dependencies.hyper]
+git = "https://github.com/hyperium/hyper.git"
+
+[dependencies.oauth-client]
+git = "https://github.com/devigned/oauth-client-rs"
 
 [[bin]]
 name = "vault"
