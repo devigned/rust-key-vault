@@ -1,6 +1,7 @@
 #![allow(unstable)]
 
 extern crate vault;
+extern crate hyper;
 
 #[macro_use] extern crate log;
 
@@ -19,3 +20,4 @@ macro_rules! test {
 
 mod test_vault;
 mod test_hello_world;
+mod http;
