@@ -6,7 +6,7 @@ use std::io::IoError;
 use url::ParseError;
 use hyper::HttpError;
 use hyper;
-use http::www_authorization::*;
+use http::authorization_header::*;
 
 pub struct VaultClient<'a>{
   client: Client<HttpConnector<'a>>,

@@ -1,5 +1,5 @@
 use std::io::MemReader;
-use vault::http::www_authorization::*;
+use vault::http::authorization_header::*;
 use hyper::header::{Headers};
 
 fn setup() {

@@ -2,4 +2,4 @@
 //pub use self::WwwAuthorization;
 
 pub mod rest;
-pub mod www_authorization;
+pub mod authorization_header;
