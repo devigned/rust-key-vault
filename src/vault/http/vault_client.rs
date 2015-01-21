@@ -1,11 +1,11 @@
 
+use hyper;
 use hyper::client::*;
 use hyper::net::{HttpConnector};
 
 use std::io::IoError;
 use url::ParseError;
 use hyper::HttpError;
-use hyper;
 use http::authorization_header::*;
 
 pub struct VaultClient<'a>{

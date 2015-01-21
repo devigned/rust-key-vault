@@ -7,12 +7,12 @@ extern crate url;
 extern crate regex;
 extern crate "rustc-serialize" as serialize;
 
-use self::http::*;
+use self::http::vault_client;
 
 pub mod http;
 
 pub fn connect(key: &str, secret: &str){
-  let mut client = rest::VaultClient::new("djvault", key, secret);
+  let mut client = vault_client::VaultClient::new("djvault", key, secret);
   let result = client.get_key("mykey");
 
   match result {
