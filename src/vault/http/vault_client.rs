@@ -6,7 +6,7 @@ use hyper::net::{HttpConnector};
 use std::io::IoError;
 use url::ParseError;
 use hyper::HttpError;
-use http::authorization_header::*;
+use http::authenticate_header::*;
 
 pub struct VaultClient<'a>{
   client: Client<HttpConnector<'a>>,
@@ -41,9 +41,12 @@ impl<'a> VaultClient<'a> {
     fn handle_result(mut result: Result<Response, HttpError>) -> Result<Response, HttpError>{
       match result {
         Ok(res) => {
+          let headers = res.headers.clone();
           match res.status {
             hyper::status::StatusCode::Unauthorized => {
-              println!("Headers:\n{}", res.headers);
+
+              let auth = headers.get::<WwwAuthenticate<Bearer>>().unwrap();
+              println!("Authorization url: {:?}", &auth.0.authorization[]);
               Ok(res)
             },
             _ => Ok(res)

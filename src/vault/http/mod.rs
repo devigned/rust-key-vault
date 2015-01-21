@@ -1,3 +1,3 @@
 pub mod vault_client;
 
-pub mod authorization_header;
+pub mod authenticate_header;

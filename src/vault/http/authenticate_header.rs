@@ -7,9 +7,9 @@ use regex::Regex;
 
 /// The `WWW-Authorization` header field.
 #[derive(Clone, PartialEq, Show)]
-pub struct WwwAuthorization<S: Scheme>(pub S);
+pub struct WwwAuthenticate<S: Scheme>(pub S);
 
-impl<S: Scheme> Deref for WwwAuthorization<S> {
+impl<S: Scheme> Deref for WwwAuthenticate<S> {
     type Target = S;
 
     fn deref<'a>(&'a self) -> &'a S {
@@ -17,25 +17,25 @@ impl<S: Scheme> Deref for WwwAuthorization<S> {
     }
 }
 
-impl<S: Scheme> DerefMut for WwwAuthorization<S> {
+impl<S: Scheme> DerefMut for WwwAuthenticate<S> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut S {
         &mut self.0
     }
 }
 
-impl<S: Scheme> Header for WwwAuthorization<S> {
-    fn header_name(_: Option<WwwAuthorization<S>>) -> &'static str {
-        "WWW-Authorization"
+impl<S: Scheme> Header for WwwAuthenticate<S> {
+    fn header_name(_: Option<WwwAuthenticate<S>>) -> &'static str {
+        "WWW-Authenticate"
     }
 
-    fn parse_header(raw: &[Vec<u8>]) -> Option<WwwAuthorization<S>> {
+    fn parse_header(raw: &[Vec<u8>]) -> Option<WwwAuthenticate<S>> {
         if raw.len() == 1 {
             match (from_utf8(unsafe { &raw[].get_unchecked(0)[] }), Scheme::scheme(None::<S>)) {
                 (Ok(header), Some(scheme))
                     if header.starts_with(scheme) && header.len() > scheme.len() + 1 => {
-                    header[scheme.len() + 1..].parse::<S>().map(|s| WwwAuthorization(s))
+                    header[scheme.len() + 1..].parse::<S>().map(|s| WwwAuthenticate(s))
                 },
-                (Ok(header), None) => header.parse::<S>().map(|s| WwwAuthorization(s)),
+                (Ok(header), None) => header.parse::<S>().map(|s| WwwAuthenticate(s)),
                 _ => None
             }
         } else {
@@ -44,7 +44,7 @@ impl<S: Scheme> Header for WwwAuthorization<S> {
     }
 }
 
-impl<S: Scheme> HeaderFormat for WwwAuthorization<S> {
+impl<S: Scheme> HeaderFormat for WwwAuthenticate<S> {
     fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match Scheme::scheme(None::<S>) {
             Some(scheme) => try!(write!(fmt, "{} ", scheme)),
@@ -71,7 +71,7 @@ impl Scheme for String {
     }
 
     fn fmt_scheme(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{}", self)
+        write!(f, "{}", self)
     }
 }
 
