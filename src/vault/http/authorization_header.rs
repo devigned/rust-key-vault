@@ -3,6 +3,7 @@ use std::str::{FromStr, from_utf8};
 use std::ops::{Deref, DerefMut};
 use serialize::base64::{ToBase64, FromBase64, Standard, Config, Newline};
 use hyper::header::{Header, HeaderFormat};
+use regex::Regex;
 
 /// The `WWW-Authorization` header field.
 #[derive(Clone, PartialEq, Show)]
@@ -100,32 +101,41 @@ impl Scheme for Bearer {
 
 impl FromStr for Bearer {
     fn from_str(s: &str) -> Option<Bearer> {
-        match s.from_base64() {
-            Ok(decoded) => match String::from_utf8(decoded) {
-                Ok(text) => {
-                    let mut parts = &mut text[].split(',');
-                    let authorization = match parts.next() {
-                        Some(part) => part.to_string(),
-                        None => return None
-                    };
-                    let resource = match parts.next() {
-                        Some(part) => part.to_string(),
-                        None => return None
-                    };
-                    Some(Bearer {
-                        authorization: authorization,
-                        resource: resource
-                    })
+      match Regex::new("authorization=\"(.+?)\""){
+        Ok(auth_re) => {
+          match auth_re.captures(s) {
+            Some(auth_cap) => {
+              match Regex::new("resource=\"(.+?)\"") {
+                Ok(resource_re) => {
+                  match resource_re.captures(s) {
+                    Some(re_cap) => {
+                      Some(Bearer {
+                        authorization: auth_cap.at(1).unwrap().to_string(),
+                        resource: re_cap.at(1).unwrap().to_string()
+                        })
+                    },
+                    None => {
+                      debug!("Bearer::no_resource_capture");
+                      None
+                    }
+                  }
                 },
                 Err(e) => {
-                    debug!("Bearer::from_utf8 error={:?}", e);
-                    None
+                  debug!("Bearer::resource_re_failed error={:?}", e);
+                  None
                 }
+              }
             },
-            Err(e) => {
-                debug!("Bearer::from_base64 error={:?}", e);
-                None
+            None => {
+              debug!("Bearer::no_auth_capture");
+              None
             }
+          }
+        },
+        Err(e) => {
+          debug!("Bearer::auth_re_failed error={:?}", e);
+          None
         }
+      }
     }
 }

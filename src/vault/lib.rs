@@ -4,6 +4,7 @@
 #[macro_use] extern crate log;
 extern crate hyper;
 extern crate url;
+extern crate regex;
 extern crate "rustc-serialize" as serialize;
 
 use self::http::*;
