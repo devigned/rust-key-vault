@@ -11,13 +11,13 @@ use self::http::vault_client;
 
 pub mod http;
 
-pub fn connect(key: &str, secret: &str){
-  let mut client = vault_client::VaultClient::new("djvault", key, secret);
+pub fn connect(vault: &str, key: &str, secret: &str){
+  let mut client = vault_client::VaultClient::new(vault, key, secret);
   let result = client.get_key("mykey");
 
   match result {
     Ok(res) => {
-      println!("response: {:?}", res.status);
+      println!("response: {:?}", res);
     }
     Err(res) => {
       println!("error: {:?}", res);

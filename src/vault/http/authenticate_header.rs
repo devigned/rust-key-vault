@@ -1,7 +1,6 @@
 use std::fmt;
 use std::str::{FromStr, from_utf8};
 use std::ops::{Deref, DerefMut};
-use serialize::base64::{ToBase64, FromBase64, Standard, Config, Newline};
 use hyper::header::{Header, HeaderFormat};
 use regex::Regex;
 
@@ -24,7 +23,7 @@ impl<S: Scheme> DerefMut for WwwAuthenticate<S> {
 }
 
 impl<S: Scheme> Header for WwwAuthenticate<S> {
-    fn header_name(_: Option<WwwAuthenticate<S>>) -> &'static str {
+    fn header_name() -> &'static str {
         "WWW-Authenticate"
     }
 
@@ -121,7 +120,7 @@ impl FromStr for Bearer {
                   }
                 },
                 Err(e) => {
-                  debug!("Bearer::resource_re_failed error={:?}", e);
+                  debug!("Bearer::resource_regex_failed error={:?}", e);
                   None
                 }
               }
@@ -133,7 +132,7 @@ impl FromStr for Bearer {
           }
         },
         Err(e) => {
-          debug!("Bearer::auth_re_failed error={:?}", e);
+          debug!("Bearer::auth_regex_failed error={:?}", e);
           None
         }
       }
