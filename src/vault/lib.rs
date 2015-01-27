@@ -5,7 +5,7 @@
 extern crate hyper;
 extern crate url;
 extern crate regex;
-extern crate "rustc-serialize" as serialize;
+extern crate "rustc-serialize" as rustc_serialize;
 
 use self::http::vault_client;
 
@@ -17,7 +17,7 @@ pub fn connect(vault: &str, key: &str, secret: &str){
 
   match result {
     Ok(res) => {
-      println!("response: {:?}", res);
+      println!("response: {:?}", res.status);
     }
     Err(res) => {
       println!("error: {:?}", res);

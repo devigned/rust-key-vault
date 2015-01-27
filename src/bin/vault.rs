@@ -2,5 +2,5 @@
 #[macro_use] extern crate vault;
 
 fn main() {
-  vault::connect("<your vault>", "<your key>", "<your secret>");
+  vault::connect("vault_name", "client_id", "client_secret");
 }

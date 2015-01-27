@@ -9,6 +9,8 @@ use hyper::status::StatusCode;
 
 use url;
 
+use rustc_serialize::json;
+
 use http::authenticate_header::*;
 
 pub struct VaultClient<'a>{
@@ -16,7 +18,17 @@ pub struct VaultClient<'a>{
   vault_name: &'a str,
   key: &'a str,
   secret: &'a str,
-  auth_token: Option<String>
+  auth_token: Option<AuthToken<'a>>
+}
+
+#[derive(RustcEncodable, RustcDecodable, Show)]
+struct AuthToken<'a> {
+  token_type: String,
+  expires_in: i32,
+  expires_on: i32,
+  not_before: i32,
+  resource: String,
+  access_token: String,
 }
 
 
@@ -31,57 +43,47 @@ impl<'a> VaultClient<'a> {
         }
     }
 
-    pub fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<String>{
+    pub fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<Response>{
       let url_str = VaultClient::key_url(self.vault_name, key_name);
       let url = url_str.as_slice();
-      println!("{:?}", url);
-      let result = self.client.get(url).send();
-
-      match VaultClient::handle_result(&mut self.client, result, self.key.clone(), self.secret.clone()) {
-        Ok(mut res) => {
-          match res.read_to_string(){
-            Ok(string) => Ok(string),
-            Err(err) => panic!("io-error reading body: {:?}", err)
-          }
-          },
-        Err(err) => Err(err)
-      }
+      let mut execute_get_key = |&: client: &mut Client<HttpConnector>| client.get(url).send();
+      VaultClient::execute_wrapper(self, execute_get_key)
     }
 
-    fn key_url<'b>(vault_name: &str, key_name: &str) -> String{
-      let mut url = String::from_str("https://{vault_name}.vault.azure.net/keys/{key_name}");
-      url.replace("{vault_name}", vault_name)
-        .replace("{key_name}", key_name)
-    }
-
-    fn handle_result(client: &mut Client<HttpConnector>, result: hyper::HttpResult<Response>, key: &str, secret: &str) -> hyper::HttpResult<Response>{
-      match result {
+    fn execute_wrapper<F: Fn(&mut Client<HttpConnector>) -> hyper::HttpResult<Response>>(vault_client: &mut VaultClient, req_fn: F) -> hyper::HttpResult<Response>{
+      match req_fn(&mut vault_client.client) {
         Ok(res) => {
           match res.status {
             StatusCode::Unauthorized => {
-              let ref my_res = res;
-              let bearer_header = my_res.headers.get::<WwwAuthenticate<Bearer>>();
-              match bearer_header {
-                Some(header) => {
-                  println!("Authorization url: {:?}", &header.0.authorization);
-                  let mut auth_url = header.0.authorization.clone();
-                  auth_url.push_str("/oauth2/token");
-                  let resource = header.0.resource.as_slice();
-                  match VaultClient::authenticate(client, auth_url.as_slice(), resource, key, secret){
-                    Ok(auth_res) => {
-                      println!("{:?}", auth_res.status);
-                      Ok(auth_res)
-                    },
-                    Err(err) => Err(err)
-                  }
+              match VaultClient::handle_401(vault_client, res) {
+                Ok(mut auth_res) => {
+                  let body = auth_res.read_to_string().unwrap();
+                  let token: AuthToken = json::decode(body.as_slice()).unwrap();
+                  vault_client.auth_token = Some(token);
+                  req_fn(&mut vault_client.client)
                 },
-                None => panic!("401 with no WWW-Authenticate header!")
+                Err(err) => Err(err)
               }
             },
             _ => Ok(res)
           }
-        }
+        },
         Err(err) => Err(err)
+      }
+    }
+
+
+    fn handle_401(vault_client: &mut VaultClient, response: Response) -> hyper::HttpResult<Response>{
+      let bearer_header = response.headers.get::<WwwAuthenticate<Bearer>>();
+      match bearer_header {
+        Some(header) => {
+          println!("Authorization url: {:?}", &header.0.authorization);
+          let mut auth_url = header.0.authorization.clone();
+          auth_url.push_str("/oauth2/token");
+          let resource = header.0.resource.as_slice();
+          VaultClient::authenticate(&mut vault_client.client, auth_url.as_slice(), resource, vault_client.key, vault_client.secret)
+        },
+        None => panic!("401 with no WWW-Authenticate header!")
       }
     }
 
@@ -109,5 +111,11 @@ impl<'a> VaultClient<'a> {
         .headers(req_headers)
         .body(post_body.as_slice())
         .send()
+    }
+
+    fn key_url<'b>(vault_name: &str, key_name: &str) -> String{
+      let url = String::from_str("https://{vault_name}.vault.azure.net/keys/{key_name}");
+      url.replace("{vault_name}", vault_name)
+      .replace("{key_name}", key_name)
     }
 }
