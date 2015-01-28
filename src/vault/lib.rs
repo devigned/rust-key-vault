@@ -16,8 +16,8 @@ pub fn connect(vault: &str, key: &str, secret: &str){
   let result = client.get_key("mykey");
 
   match result {
-    Ok(res) => {
-      println!("response: {:?}", res.status);
+    Ok(mut res) => {
+      println!("response: {:?}", res.read_to_string());
     }
     Err(res) => {
       println!("error: {:?}", res);

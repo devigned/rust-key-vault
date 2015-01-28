@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::{FromStr, from_utf8};
 use std::ops::{Deref, DerefMut};
-use hyper::header::{Header, HeaderFormat};
+use hyper::header::{Header, HeaderFormat, Scheme};
 use regex::Regex;
 
 /// The `WWW-Authorization` header field.
@@ -53,25 +53,28 @@ impl<S: Scheme> HeaderFormat for WwwAuthenticate<S> {
     }
 }
 
-/// An Authorization scheme to be used in the header.
-pub trait Scheme: FromStr + Clone + Send + Sync {
-    /// An optional Scheme name.
-    ///
-    /// For example, `Bearer asdf` has the name `Bearer`. The Option<Self> is
-    /// just a marker that can be removed once UFCS is completed.
-    fn scheme(Option<Self>) -> Option<&'static str>;
-    /// Format the Scheme data into a header value.
-    fn fmt_scheme(&self, &mut fmt::Formatter) -> fmt::Result;
+
+/// Credential holder for Basic Authentication
+#[derive(Clone, PartialEq, Debug)]
+pub struct BearerToken {
+  /// The token
+  pub token: String,
 }
 
-impl Scheme for String {
-    fn scheme(_: Option<String>) -> Option<&'static str> {
-        None
-    }
+impl Scheme for BearerToken {
+  fn scheme(_: Option<BearerToken>) -> Option<&'static str> {
+    Some("Bearer")
+  }
 
-    fn fmt_scheme(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
-    }
+  fn fmt_scheme(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}", self.token)
+  }
+}
+
+impl FromStr for BearerToken {
+  fn from_str(s: &str) -> Option<BearerToken> {
+    Some(BearerToken{ token: s.to_string() })
+  }
 }
 
 /// Credential holder for Bearer Authentication

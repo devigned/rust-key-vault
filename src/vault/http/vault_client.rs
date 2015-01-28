@@ -1,9 +1,10 @@
 
 use hyper;
 use hyper::client::{Client, Response};
+use hyper::header::{Authorization};
 use hyper::HttpError;
 use hyper::method::Method;
-use hyper::method::Method::{Get, Post, Delete, Put, Patch};
+use hyper::method::Method::{Post};
 use hyper::net::{HttpConnector};
 use hyper::status::StatusCode;
 
@@ -21,7 +22,7 @@ pub struct VaultClient<'a>{
   auth_token: Option<AuthToken<'a>>
 }
 
-#[derive(RustcEncodable, RustcDecodable, Show)]
+#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
 struct AuthToken<'a> {
   token_type: String,
   expires_in: i32,
@@ -46,12 +47,21 @@ impl<'a> VaultClient<'a> {
     pub fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<Response>{
       let url_str = VaultClient::key_url(self.vault_name, key_name);
       let url = url_str.as_slice();
-      let mut execute_get_key = |&: client: &mut Client<HttpConnector>| client.get(url).send();
+      let execute_get_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+        match auth_token {
+          Some(token) => {
+            let mut req_headers = hyper::header::Headers::new();
+            req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
+            client.get(url).headers(req_headers).send()
+          },
+          None => client.get(url).send()
+        }
+      };
       VaultClient::execute_wrapper(self, execute_get_key)
     }
 
-    fn execute_wrapper<F: Fn(&mut Client<HttpConnector>) -> hyper::HttpResult<Response>>(vault_client: &mut VaultClient, req_fn: F) -> hyper::HttpResult<Response>{
-      match req_fn(&mut vault_client.client) {
+    fn execute_wrapper<F: Fn(&mut Client<HttpConnector>, Option<AuthToken>) -> hyper::HttpResult<Response>>(vault_client: &mut VaultClient, req_fn: F) -> hyper::HttpResult<Response>{
+      match req_fn(&mut vault_client.client, vault_client.auth_token.clone()) {
         Ok(res) => {
           match res.status {
             StatusCode::Unauthorized => {
@@ -60,7 +70,7 @@ impl<'a> VaultClient<'a> {
                   let body = auth_res.read_to_string().unwrap();
                   let token: AuthToken = json::decode(body.as_slice()).unwrap();
                   vault_client.auth_token = Some(token);
-                  req_fn(&mut vault_client.client)
+                  req_fn(&mut vault_client.client, vault_client.auth_token.clone())
                 },
                 Err(err) => Err(err)
               }
@@ -77,7 +87,6 @@ impl<'a> VaultClient<'a> {
       let bearer_header = response.headers.get::<WwwAuthenticate<Bearer>>();
       match bearer_header {
         Some(header) => {
-          println!("Authorization url: {:?}", &header.0.authorization);
           let mut auth_url = header.0.authorization.clone();
           auth_url.push_str("/oauth2/token");
           let resource = header.0.resource.as_slice();
@@ -114,7 +123,7 @@ impl<'a> VaultClient<'a> {
     }
 
     fn key_url<'b>(vault_name: &str, key_name: &str) -> String{
-      let url = String::from_str("https://{vault_name}.vault.azure.net/keys/{key_name}");
+      let url = String::from_str("https://{vault_name}.vault.azure.net/keys/{key_name}?api-version=2014-12-08-preview");
       url.replace("{vault_name}", vault_name)
       .replace("{key_name}", key_name)
     }
