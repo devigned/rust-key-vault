@@ -19,5 +19,4 @@ macro_rules! test {
 }
 
 mod test_vault;
-mod test_hello_world;
 mod http;
