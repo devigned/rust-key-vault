@@ -22,6 +22,7 @@ pub struct VaultClient<'a>{
   auth_token: Option<AuthToken<'a>>
 }
 
+// authentication bearer token
 #[derive(RustcEncodable, RustcDecodable, Show, Clone)]
 struct AuthToken<'a> {
   token_type: String,
@@ -30,6 +31,29 @@ struct AuthToken<'a> {
   not_before: i32,
   resource: String,
   access_token: String,
+}
+
+// Azure Key Vault asymmetric key representation
+#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
+pub struct KeyWrapper<'a> {
+  key: Key<'a>,
+  attributes: Attributes<'a>,
+}
+
+#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
+pub struct Key<'a> {
+  kid: String,
+  kty: String,
+  n: String,
+  e: String,
+  key_ops: Vec<String>,
+}
+
+#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
+pub struct Attributes<'a> {
+  enabled: bool,
+  exp: i32,
+  nbf: i32
 }
 
 
@@ -44,7 +68,7 @@ impl<'a> VaultClient<'a> {
         }
     }
 
-    pub fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<Response>{
+    pub fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
       let url_str = VaultClient::key_url(self.vault_name, key_name);
       let url = url_str.as_slice();
       let execute_get_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
@@ -57,7 +81,15 @@ impl<'a> VaultClient<'a> {
           None => client.get(url).send()
         }
       };
-      VaultClient::execute_wrapper(self, execute_get_key)
+
+      match VaultClient::execute_wrapper(self, execute_get_key) {
+        Ok(mut res) => {
+          let body = res.read_to_string().unwrap();
+          let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
+          Ok(key)
+        },
+        Err(err) => Err(err)
+      }
     }
 
     fn execute_wrapper<F: Fn(&mut Client<HttpConnector>, Option<AuthToken>) -> hyper::HttpResult<Response>>(vault_client: &mut VaultClient, req_fn: F) -> hyper::HttpResult<Response>{

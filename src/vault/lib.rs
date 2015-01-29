@@ -13,16 +13,14 @@ pub mod http;
 
 pub fn connect(vault: &str, key: &str, secret: &str){
   let mut client = vault_client::VaultClient::new(vault, key, secret);
-  let result = client.get_key("mykey");
+  let mykey = client.get_key("mykey");
 
-  match result {
-    Ok(mut res) => {
-      println!("response: {:?}", res.read_to_string());
+  match mykey {
+    Ok(key) => {
+      println!("response: {:?}", key);
     }
-    Err(res) => {
-      println!("error: {:?}", res);
+    Err(err) => {
+      println!("error: {:?}", err);
     }
   }
-
-  println!("hello world");
 }
