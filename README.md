@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/devigned/rust-key-vault.svg?branch=master)](https://travis-ci.org/devigned/rust-key-vault)
 # Rust Key Vault
 A C compatible Rust library and command line interface with all of the features provided by the Key Vault REST API
 
