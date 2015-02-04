@@ -14,14 +14,6 @@ use rustc_serialize::json;
 
 use http::authenticate_header::*;
 
-pub struct VaultClient<'a>{
-  client: Client<HttpConnector<'a>>,
-  vault_name: &'a str,
-  key: &'a str,
-  secret: &'a str,
-  auth_token: Option<AuthToken<'a>>
-}
-
 // authentication bearer token
 #[derive(RustcEncodable, RustcDecodable, Show, Clone)]
 struct AuthToken<'a> {
@@ -56,48 +48,22 @@ pub struct Attributes<'a> {
   nbf: i32
 }
 
+pub struct AzureVaultClient<'a>{
+  client: Client<HttpConnector<'a>>,
+  vault_name: &'a str,
+  key: &'a str,
+  secret: &'a str,
+  auth_token: Option<AuthToken<'a>>
+}
 
-impl<'a> VaultClient<'a> {
-    pub fn new(vault_name: &'a str, key: &'a str, secret: &'a str) -> VaultClient<'a> {
-      VaultClient{
-        client: Client::new(),
-        vault_name: vault_name,
-        key: key,
-        secret: secret,
-        auth_token: None
-        }
-    }
+impl<'a> AzureVaultClient<'a> {
 
-    pub fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
-      let url_str = VaultClient::key_url(self.vault_name, key_name);
-      let url = url_str.as_slice();
-      let execute_get_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
-        match auth_token {
-          Some(token) => {
-            let mut req_headers = hyper::header::Headers::new();
-            req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
-            client.get(url).headers(req_headers).send()
-          },
-          None => client.get(url).send()
-        }
-      };
-
-      match VaultClient::execute_wrapper(self, execute_get_key) {
-        Ok(mut res) => {
-          let body = res.read_to_string().unwrap();
-          let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
-          Ok(key)
-        },
-        Err(err) => Err(err)
-      }
-    }
-
-    fn execute_wrapper<F: Fn(&mut Client<HttpConnector>, Option<AuthToken>) -> hyper::HttpResult<Response>>(vault_client: &mut VaultClient, req_fn: F) -> hyper::HttpResult<Response>{
+    fn execute_wrapper<F: Fn(&mut Client<HttpConnector>, Option<AuthToken>) -> hyper::HttpResult<Response>>(vault_client: &mut AzureVaultClient, req_fn: F) -> hyper::HttpResult<Response>{
       match req_fn(&mut vault_client.client, vault_client.auth_token.clone()) {
         Ok(res) => {
           match res.status {
             StatusCode::Unauthorized => {
-              match VaultClient::handle_401(vault_client, res) {
+              match AzureVaultClient::handle_401(vault_client, res) {
                 Ok(mut auth_res) => {
                   let body = auth_res.read_to_string().unwrap();
                   let token: AuthToken = json::decode(body.as_slice()).unwrap();
@@ -115,14 +81,14 @@ impl<'a> VaultClient<'a> {
     }
 
 
-    fn handle_401(vault_client: &mut VaultClient, response: Response) -> hyper::HttpResult<Response>{
+    fn handle_401(vault_client: &mut AzureVaultClient, response: Response) -> hyper::HttpResult<Response>{
       let bearer_header = response.headers.get::<WwwAuthenticate<Bearer>>();
       match bearer_header {
         Some(header) => {
           let mut auth_url = header.0.authorization.clone();
           auth_url.push_str("/oauth2/token");
           let resource = header.0.resource.as_slice();
-          VaultClient::authenticate(&mut vault_client.client, auth_url.as_slice(), resource, vault_client.key, vault_client.secret)
+          AzureVaultClient::authenticate(&mut vault_client.client, auth_url.as_slice(), resource, vault_client.key, vault_client.secret)
         },
         None => panic!("401 with no WWW-Authenticate header!")
       }
@@ -134,7 +100,7 @@ impl<'a> VaultClient<'a> {
                         ("resource", resource),
                         ("grant_type", "client_credentials")];
       let headers = vec![("content", "application/x-www-form-urlencoded")];
-      VaultClient::pstar_with_params(client, Method::Post, auth_url, parmas.into_iter(), headers.into_iter())
+      AzureVaultClient::pstar_with_params(client, Method::Post, auth_url, parmas.into_iter(), headers.into_iter())
     }
 
     fn pstar_with_params<I, J>(client: &mut Client<HttpConnector>, method: Method, url: &str, params: I, mut headers: J) -> Result<Response, HttpError>
@@ -159,4 +125,45 @@ impl<'a> VaultClient<'a> {
       url.replace("{vault_name}", vault_name)
       .replace("{key_name}", key_name)
     }
+}
+
+pub trait VaultClient<'a>: {
+  fn new(vault_name: &'a str, key: &'a str, secret: &'a str) -> Self;
+  fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>;
+}
+
+impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
+  fn new(vault_name: &'a str, key: &'a str, secret: &'a str) -> AzureVaultClient<'a> {
+    AzureVaultClient{
+      client: Client::new(),
+      vault_name: vault_name,
+      key: key,
+      secret: secret,
+      auth_token: None
+    }
+  }
+
+  fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
+    let url_str = AzureVaultClient::key_url(self.vault_name, key_name);
+    let url = url_str.as_slice();
+    let execute_get_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+      match auth_token {
+        Some(token) => {
+          let mut req_headers = hyper::header::Headers::new();
+          req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
+          client.get(url).headers(req_headers).send()
+        },
+        None => client.get(url).send()
+      }
+    };
+
+    match AzureVaultClient::execute_wrapper(self, execute_get_key) {
+      Ok(mut res) => {
+        let body = res.read_to_string().unwrap();
+        let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
+        Ok(key)
+      },
+      Err(err) => Err(err)
+    }
+  }
 }

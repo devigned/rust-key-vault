@@ -7,12 +7,13 @@ extern crate url;
 extern crate regex;
 extern crate "rustc-serialize" as rustc_serialize;
 
-use self::http::vault_client;
+use http::vault_client::AzureVaultClient;
+use http::vault_client::VaultClient;
 
 pub mod http;
 
 pub fn connect(vault: &str, key: &str, secret: &str){
-  let mut client = vault_client::VaultClient::new(vault, key, secret);
+  let mut client: AzureVaultClient = VaultClient::new(vault, key, secret);
   let mykey = client.get_key("mykey");
 
   match mykey {
