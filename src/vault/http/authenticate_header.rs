@@ -32,9 +32,9 @@ impl<S: Scheme> Header for WwwAuthenticate<S> {
             match (from_utf8(unsafe { &raw[].get_unchecked(0)[] }), Scheme::scheme(None::<S>)) {
                 (Ok(header), Some(scheme))
                     if header.starts_with(scheme) && header.len() > scheme.len() + 1 => {
-                    header[scheme.len() + 1..].parse::<S>().map(|s| WwwAuthenticate(s))
+                    header[scheme.len() + 1..].parse::<S>().map(|s| WwwAuthenticate(s)).ok()
                 },
-                (Ok(header), None) => header.parse::<S>().map(|s| WwwAuthenticate(s)),
+                (Ok(header), None) => header.parse::<S>().map(|s| WwwAuthenticate(s)).ok(),
                 _ => None
             }
         } else {
@@ -72,8 +72,9 @@ impl Scheme for BearerToken {
 }
 
 impl FromStr for BearerToken {
-  fn from_str(s: &str) -> Option<BearerToken> {
-    Some(BearerToken{ token: s.to_string() })
+  type Err = ();
+  fn from_str(s: &str) -> Result<BearerToken, ()> {
+    Ok(BearerToken{ token: s.to_string() })
   }
 }
 
@@ -102,7 +103,8 @@ impl Scheme for Bearer {
 }
 
 impl FromStr for Bearer {
-    fn from_str(s: &str) -> Option<Bearer> {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Bearer, ()> {
       match Regex::new("authorization=\"(.+?)\""){
         Ok(auth_re) => {
           match auth_re.captures(s) {
@@ -111,32 +113,32 @@ impl FromStr for Bearer {
                 Ok(resource_re) => {
                   match resource_re.captures(s) {
                     Some(re_cap) => {
-                      Some(Bearer {
+                      Ok(Bearer {
                         authorization: auth_cap.at(1).unwrap().to_string(),
                         resource: re_cap.at(1).unwrap().to_string()
                         })
                     },
                     None => {
                       debug!("Bearer::no_resource_capture");
-                      None
+                      Err(())
                     }
                   }
                 },
                 Err(e) => {
                   debug!("Bearer::resource_regex_failed error={:?}", e);
-                  None
+                  Err(())
                 }
               }
             },
             None => {
               debug!("Bearer::no_auth_capture");
-              None
+              Err(())
             }
           }
         },
         Err(e) => {
           debug!("Bearer::auth_regex_failed error={:?}", e);
-          None
+          Err(())
         }
       }
     }
