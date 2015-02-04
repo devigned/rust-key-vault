@@ -1,4 +1,4 @@
-use std::io::MemReader;
+use std::old_io::MemReader;
 use vault::http::authenticate_header::*;
 use hyper::header::{Headers};
 
