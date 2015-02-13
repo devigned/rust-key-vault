@@ -15,7 +15,7 @@ use rustc_serialize::json;
 use http::authenticate_header::*;
 
 // authentication bearer token
-#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
 struct AuthToken<'a> {
   token_type: String,
   expires_in: i32,
@@ -26,13 +26,13 @@ struct AuthToken<'a> {
 }
 
 // Azure Key Vault asymmetric key representation
-#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
 pub struct KeyWrapper<'a> {
   key: Key<'a>,
   attributes: Attributes<'a>,
 }
 
-#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
 pub struct Key<'a> {
   kid: String,
   kty: String,
@@ -41,7 +41,7 @@ pub struct Key<'a> {
   key_ops: Vec<String>,
 }
 
-#[derive(RustcEncodable, RustcDecodable, Show, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
 pub struct Attributes<'a> {
   enabled: bool,
   exp: i32,
@@ -103,7 +103,7 @@ impl<'a> AzureVaultClient<'a> {
       AzureVaultClient::pstar_with_params(client, Method::Post, auth_url, parmas.into_iter(), headers.into_iter())
     }
 
-    fn pstar_with_params<I, J>(client: &mut Client<HttpConnector>, method: Method, url: &str, params: I, mut headers: J) -> Result<Response, HttpError>
+    fn pstar_with_params<I, J>(client: &mut Client<HttpConnector>, method: Method, url: &str, params: I, headers: J) -> Result<Response, HttpError>
                           where I: Iterator<Item = (&'a str, &'a str)>,
                                 J: Iterator<Item = (&'static str, &'a str)>{
       let mut req_headers = hyper::header::Headers::new();
@@ -130,6 +130,13 @@ impl<'a> AzureVaultClient<'a> {
 pub trait VaultClient<'a>: {
   fn new(vault_name: &'a str, key: &'a str, secret: &'a str) -> Self;
   fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>;
+  fn update_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
+  fn delete_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
+  fn create_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
+  fn encrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>;
+  fn decrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>;
+  fn wrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>;
+  fn unwrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>;
 }
 
 impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
@@ -165,5 +172,33 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
       },
       Err(err) => Err(err)
     }
+  }
+
+  fn update_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>{
+    Ok(key)
+  }
+
+  fn delete_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>{
+    Ok(key)
+  }
+
+  fn create_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>{
+    Ok(key)
+  }
+
+  fn encrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>{
+    Ok(String::new())
+  }
+
+  fn decrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>{
+    Ok(String::new())
+  }
+
+  fn wrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>{
+    Ok(String::new())
+  }
+
+  fn unwrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>{
+    Ok(String::new())
   }
 }

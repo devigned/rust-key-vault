@@ -5,7 +5,7 @@ use hyper::header::{Header, HeaderFormat, Scheme};
 use regex::Regex;
 
 /// The `WWW-Authorization` header field.
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct WwwAuthenticate<S: Scheme>(pub S);
 
 impl<S: Scheme> Deref for WwwAuthenticate<S> {
@@ -79,7 +79,7 @@ impl FromStr for BearerToken {
 }
 
 /// Credential holder for Bearer Authentication
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Bearer {
     /// The url to authenticate against
     pub authorization: String,

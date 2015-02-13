@@ -1,5 +1,7 @@
 #![crate_name="vault"]
-#![allow(unstable)]
+#![feature(io)]
+#![feature(core)]
+#![feature(collections)]
 
 #[macro_use] extern crate log;
 extern crate hyper;
