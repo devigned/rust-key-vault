@@ -1,7 +1,8 @@
 
 use hyper;
 use hyper::client::{Client, Response};
-use hyper::header::{Authorization};
+use hyper::mime::*;
+use hyper::header::{Authorization, ContentType};
 use hyper::HttpError;
 use hyper::method::Method;
 use hyper::method::Method::{Post};
@@ -16,7 +17,7 @@ use http::authenticate_header::*;
 
 // authentication bearer token
 #[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
-struct AuthToken<'a> {
+struct AuthToken {
   token_type: String,
   expires_in: i32,
   expires_on: i32,
@@ -27,25 +28,39 @@ struct AuthToken<'a> {
 
 // Azure Key Vault asymmetric key representation
 #[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
-pub struct KeyWrapper<'a> {
-  key: Key<'a>,
-  attributes: Attributes<'a>,
+pub struct KeyWrapper {
+  pub key: Key,
+  pub attributes: Attributes,
 }
 
 #[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
-pub struct Key<'a> {
-  kid: String,
+pub struct Key {
+  pub kid: String,
+  pub kty: String,
+  pub n: String,
+  pub e: String,
+  pub key_ops: Vec<String>,
+}
+
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
+pub struct KeyListItem {
+  pub kid: String,
+  attributes: Attributes
+}
+
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
+struct CreateKey {
   kty: String,
-  n: String,
-  e: String,
   key_ops: Vec<String>,
+  attributes: Attributes
 }
 
-#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
-pub struct Attributes<'a> {
-  enabled: bool,
-  exp: i32,
-  nbf: i32
+
+#[derive(RustcEncodable, RustcDecodable, PartialEq, Debug, Clone)]
+pub struct Attributes {
+  pub enabled: Option<bool>,
+  pub exp: Option<i32>,
+  pub nbf: Option<i32>
 }
 
 pub struct AzureVaultClient<'a>{
@@ -53,7 +68,7 @@ pub struct AzureVaultClient<'a>{
   vault_name: &'a str,
   key: &'a str,
   secret: &'a str,
-  auth_token: Option<AuthToken<'a>>
+  auth_token: Option<AuthToken>
 }
 
 impl<'a> AzureVaultClient<'a> {
@@ -79,7 +94,6 @@ impl<'a> AzureVaultClient<'a> {
         Err(err) => Err(err)
       }
     }
-
 
     fn handle_401(vault_client: &mut AzureVaultClient, response: Response) -> hyper::HttpResult<Response>{
       let bearer_header = response.headers.get::<WwwAuthenticate<Bearer>>();
@@ -120,19 +134,34 @@ impl<'a> AzureVaultClient<'a> {
         .send()
     }
 
-    fn key_url<'b>(vault_name: &str, key_name: &str) -> String{
-      let url = String::from_str("https://{vault_name}.vault.azure.net/keys/{key_name}?api-version=2014-12-08-preview");
-      url.replace("{vault_name}", vault_name)
-      .replace("{key_name}", key_name)
+    fn key_url<'b>(vault_name: &str, key_name: &str, operation: Option<&str>) -> String{
+      let url = String::from_str("https://{vault_name}.vault.azure.net/keys/{key_name}{op}?api-version=2014-12-08-preview")
+        .replace("{vault_name}", vault_name)
+        .replace("{key_name}", key_name);
+      match operation {
+        Some(op) => {
+          let op_string = String::from_str("/") + op;
+          url.replace("{op}", op_string.as_slice())
+        },
+        None => {
+          url.replace("{op}", "")
+        }
+      }
+    }
+
+    fn root_keys_url<'b>(vault_name: &str) -> String{
+      String::from_str("https://{vault_name}.vault.azure.net/keys?api-version=2014-12-08-preview")
+        .replace("{vault_name}", vault_name)
     }
 }
 
 pub trait VaultClient<'a>: {
   fn new(vault_name: &'a str, key: &'a str, secret: &'a str) -> Self;
+  fn list<'b>(&mut self) -> hyper::HttpResult<Vec<KeyListItem>>;
   fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>;
   fn update_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
-  fn delete_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
-  fn create_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
+  fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>;
+  fn create_key<'b>(&mut self, key_name: &str, key_ops: Vec<String>) -> hyper::HttpResult<KeyWrapper>;
   fn encrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>;
   fn decrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>;
   fn wrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>;
@@ -151,7 +180,7 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
   }
 
   fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
-    let url_str = AzureVaultClient::key_url(self.vault_name, key_name);
+    let url_str = AzureVaultClient::key_url(self.vault_name, key_name, None);
     let url = url_str.as_slice();
     let execute_get_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
@@ -178,12 +207,85 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
     Ok(key)
   }
 
-  fn delete_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>{
-    Ok(key)
+  fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
+    let url_str = AzureVaultClient::key_url(self.vault_name, key_name, None);
+    let url = url_str.as_slice();
+    let execute_delete_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+      match auth_token {
+        Some(token) => {
+          let mut req_headers = hyper::header::Headers::new();
+          req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
+          client.delete(url).headers(req_headers).send()
+        },
+        None => client.delete(url).send()
+      }
+    };
+
+    match AzureVaultClient::execute_wrapper(self, execute_delete_key) {
+      Ok(mut res) => {
+        let body = res.read_to_string().unwrap();
+        let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
+        Ok(key)
+      },
+      Err(err) => Err(err)
+    }
   }
 
-  fn create_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>{
-    Ok(key)
+  fn create_key<'b>(&mut self, key_name: &str, key_ops: Vec<String>) -> hyper::HttpResult<KeyWrapper>{
+    let url_str = AzureVaultClient::key_url(self.vault_name, key_name, Some("create"));
+    let url = url_str.as_slice();
+    let create_key = CreateKey{kty: "RSA".to_string(), key_ops: key_ops, attributes: Attributes{enabled: Some(true), nbf: None, exp: None}};
+    let request_body = json::encode(&create_key).unwrap();
+    let execute_create_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+      match auth_token {
+        Some(token) => {
+          let mut req_headers = hyper::header::Headers::new();
+          let json_mime: Mime = "application/json".parse().unwrap();
+          req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
+          req_headers.set(ContentType(json_mime));
+          client.post(url).headers(req_headers).body(request_body.as_slice()).send()
+        },
+        None => {
+          let mut req_headers = hyper::header::Headers::new();
+          let json_mime: Mime = "application/json".parse().unwrap();
+          req_headers.set(ContentType(json_mime));
+          client.post(url).headers(req_headers).body(request_body.as_slice()).send()
+        }
+      }
+    };
+
+    match AzureVaultClient::execute_wrapper(self, execute_create_key) {
+      Ok(mut res) => {
+        let body = res.read_to_string().unwrap();
+        let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
+        Ok(key)
+      },
+      Err(err) => Err(err)
+    }
+  }
+
+  fn list<'b>(&mut self) -> hyper::HttpResult<Vec<KeyListItem>>{
+    let url_str = AzureVaultClient::root_keys_url(self.vault_name);
+    let url = url_str.as_slice();
+    let execute_list_keys = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+      match auth_token {
+        Some(token) => {
+          let mut req_headers = hyper::header::Headers::new();
+          req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
+          client.get(url).headers(req_headers).send()
+        },
+        None => client.get(url).send()
+      }
+    };
+
+    match AzureVaultClient::execute_wrapper(self, execute_list_keys) {
+      Ok(mut res) => {
+        let body = res.read_to_string().unwrap();
+        let keys: Vec<KeyListItem> = json::decode(body.as_slice()).unwrap();
+        Ok(keys)
+      },
+      Err(err) => Err(err)
+    }
   }
 
   fn encrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>{

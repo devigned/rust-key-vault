@@ -22,14 +22,14 @@ impl<S: Scheme> DerefMut for WwwAuthenticate<S> {
     }
 }
 
-impl<S: Scheme> Header for WwwAuthenticate<S> {
+impl<S: Scheme + 'static> Header for WwwAuthenticate<S> where <S as FromStr>::Err: 'static{
     fn header_name() -> &'static str {
         "WWW-Authenticate"
     }
 
     fn parse_header(raw: &[Vec<u8>]) -> Option<WwwAuthenticate<S>> {
         if raw.len() == 1 {
-            match (from_utf8(unsafe { &raw[].get_unchecked(0)[] }), Scheme::scheme(None::<S>)) {
+            match (from_utf8(unsafe { &raw[..].get_unchecked(0)[..] }), Scheme::scheme(None::<S>)) {
                 (Ok(header), Some(scheme))
                     if header.starts_with(scheme) && header.len() > scheme.len() + 1 => {
                     header[scheme.len() + 1..].parse::<S>().map(|s| WwwAuthenticate(s)).ok()
@@ -43,7 +43,7 @@ impl<S: Scheme> Header for WwwAuthenticate<S> {
     }
 }
 
-impl<S: Scheme> HeaderFormat for WwwAuthenticate<S> {
+impl<S: Scheme+ 'static> HeaderFormat for WwwAuthenticate<S> where <S as FromStr>::Err: 'static {
     fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match Scheme::scheme(None::<S>) {
             Some(scheme) => try!(write!(fmt, "{} ", scheme)),

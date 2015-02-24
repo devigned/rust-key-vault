@@ -1,5 +1,5 @@
 #![crate_name="vault"]
-#![feature(io)]
+#![feature(old_io)]
 #![feature(core)]
 #![feature(collections)]
 
@@ -16,12 +16,41 @@ pub mod http;
 
 pub fn connect(vault: &str, key: &str, secret: &str){
   let mut client: AzureVaultClient = VaultClient::new(vault, key, secret);
-  let mykey = client.get_key("mykey");
 
+  display_current_keys_list(&mut client);
+
+  insert_new_key(&mut client, "mynewkey1");
+
+  display_current_keys_list(&mut client);
+
+  display_key_by_name(&mut client, "mynewkey1")
+}
+
+fn display_key_by_name(client: &mut AzureVaultClient, key_name: &str){
+  let mykey = client.get_key(key_name);
   match mykey {
     Ok(key) => {
-      println!("response: {:?}", key);
+      println!("Key Payload: {:?}\n", key);
+    },
+    Err(err) => {
+      println!("error: {:?}", err);
     }
+  }
+}
+
+fn insert_new_key(client: &mut AzureVaultClient, key_name: &str){
+  let key_ops_vec = vec!["verify", "decrypt", "encrypt", "sign"];
+  let key_ops = key_ops_vec.iter().map(|&op| String::from_str(op)).collect();
+  let create_key = client.create_key(key_name, key_ops);
+  println!("Created Key with name: {:?}\n", key_name);
+}
+
+fn display_current_keys_list(client: &mut AzureVaultClient){
+  let list = client.list();
+  match list {
+    Ok(keys) => {
+      println!("Current Key List: {:?}\n", keys);
+    },
     Err(err) => {
       println!("error: {:?}", err);
     }
