@@ -19,6 +19,10 @@ pub fn connect(vault: &str, key: &str, secret: &str){
 
   display_current_keys_list(&mut client);
 
+  delete_existing_key(&mut client, "mynewkey1");
+
+  display_current_keys_list(&mut client);
+
   insert_new_key(&mut client, "mynewkey1");
 
   display_current_keys_list(&mut client);
@@ -30,12 +34,17 @@ fn display_key_by_name(client: &mut AzureVaultClient, key_name: &str){
   let mykey = client.get_key(key_name);
   match mykey {
     Ok(key) => {
-      println!("Key Payload: {:?}\n", key);
+      println!("Found Key {:?} with Payload: {:?}\n", key_name, key);
     },
     Err(err) => {
       println!("error: {:?}", err);
     }
   }
+}
+
+fn delete_existing_key(client: &mut AzureVaultClient, key_name: &str){
+  let deleted_key = client.delete_key(key_name);
+  println!("Deleted Key with name: {:?}\n", key_name);
 }
 
 fn insert_new_key(client: &mut AzureVaultClient, key_name: &str){
