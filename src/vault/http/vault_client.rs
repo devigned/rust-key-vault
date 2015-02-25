@@ -11,7 +11,10 @@ use hyper::status::StatusCode;
 
 use url;
 
+use std::collections::BTreeMap;
+
 use rustc_serialize::json;
+use rustc_serialize::base64::{ToBase64, URL_SAFE};
 
 use http::authenticate_header::*;
 
@@ -54,7 +57,6 @@ struct CreateKey {
   key_ops: Vec<String>,
   attributes: Attributes
 }
-
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq, Debug, Clone)]
 pub struct Attributes {
@@ -139,8 +141,12 @@ impl<'a> AzureVaultClient<'a> {
         .replace("{vault_name}", vault_name)
         .replace("{key_name}", key_name);
       match operation {
+        Some("create") => {
+          let op_string = String::from_str("/") + operation.unwrap();
+          url.replace("{op}", op_string.as_slice())
+        },
         Some(op) => {
-          let op_string = String::from_str("/") + op;
+          let op_string = String::from_str("/") + operation.unwrap();
           url.replace("{op}", op_string.as_slice())
         },
         None => {
@@ -162,10 +168,11 @@ pub trait VaultClient<'a>: {
   fn update_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
   fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>;
   fn create_key<'b>(&mut self, key_name: &str, key_ops: Vec<String>) -> hyper::HttpResult<KeyWrapper>;
-  fn encrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>;
-  fn decrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>;
+  fn encrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>;
+  fn decrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>;
   fn wrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>;
   fn unwrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>;
+  fn crypto_operation(&mut self, payload: BTreeMap<&str, String>, url: String) -> hyper::HttpResult<BTreeMap<String, String>>;
 }
 
 impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
@@ -288,12 +295,32 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
     }
   }
 
-  fn encrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>{
-    Ok(String::new())
+  fn encrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>{
+    let url = AzureVaultClient::key_url(self.vault_name, key_name, Some("encrypt"));
+    let mut encrypt_payload = BTreeMap::new();
+    encrypt_payload.insert("alg", "RSA_OAEP".to_string());
+    encrypt_payload.insert("value", data.to_base64(URL_SAFE));
+
+    match self.crypto_operation(encrypt_payload, url){
+      Ok(mut map) => {
+        Ok(map.get("value").unwrap().clone())
+      },
+      Err(err) => Err(err)
+    }
   }
 
-  fn decrypt<'b>(&mut self, data: String, key_name: &str) -> hyper::HttpResult<String>{
-    Ok(String::new())
+  fn decrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>{
+    let url = AzureVaultClient::key_url(self.vault_name, key_name, Some("decrypt"));
+    let mut encrypt_payload = BTreeMap::new();
+    encrypt_payload.insert("alg", "RSA_OAEP".to_string());
+    encrypt_payload.insert("value", data.to_base64(URL_SAFE));
+
+    match self.crypto_operation(encrypt_payload, url){
+      Ok(mut map) => {
+        Ok(map.get("value").unwrap().clone())
+      },
+      Err(err) => Err(err)
+    }
   }
 
   fn wrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>{
@@ -302,5 +329,36 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
   fn unwrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>{
     Ok(String::new())
+  }
+
+  fn crypto_operation(&mut self, payload: BTreeMap<&str, String>, url: String) -> hyper::HttpResult<BTreeMap<String, String>>{
+    let url_str = url.as_slice();
+    let request_body = json::encode(&payload).unwrap();
+    let execute_create_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+      match auth_token {
+        Some(token) => {
+          let mut req_headers = hyper::header::Headers::new();
+          let json_mime: Mime = "application/json".parse().unwrap();
+          req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
+          req_headers.set(ContentType(json_mime));
+          client.post(url_str).headers(req_headers).body(request_body.as_slice()).send()
+        },
+        None => {
+          let mut req_headers = hyper::header::Headers::new();
+          let json_mime: Mime = "application/json".parse().unwrap();
+          req_headers.set(ContentType(json_mime));
+          client.post(url_str).headers(req_headers).body(request_body.as_slice()).send()
+        }
+      }
+    };
+
+    match AzureVaultClient::execute_wrapper(self, execute_create_key) {
+      Ok(mut res) => {
+        let body = res.read_to_string().unwrap();
+        let json: BTreeMap<String, String> = json::decode(body.as_slice()).unwrap();
+        Ok(json)
+      },
+      Err(err) => Err(err)
+    }
   }
 }
