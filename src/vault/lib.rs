@@ -7,6 +7,7 @@
 extern crate hyper;
 extern crate url;
 extern crate regex;
+extern crate crypto;
 extern crate "rustc-serialize" as rustc_serialize;
 
 use http::vault_client::AzureVaultClient;
@@ -15,6 +16,11 @@ use http::vault_client::VaultClient;
 pub mod http;
 
 use rustc_serialize::base64::{FromBase64};
+use rustc_serialize::hex::FromHex;
+
+use crypto::digest::Digest;
+use crypto::sha2::Sha512;
+
 
 pub fn connect(vault: &str, key: &str, secret: &str){
   let mut client: AzureVaultClient = VaultClient::new(vault, key, secret);
@@ -29,9 +35,22 @@ pub fn connect(vault: &str, key: &str, secret: &str){
 
   display_encrypt_decrypt(&mut client, "mynewkey1", "Hello World!".to_string());
 
+  display_sign_verify(&mut client, "mynewkey1", "Hello World!".to_string());
+
   display_current_keys_list(&mut client);
 
   display_key_by_name(&mut client, "mynewkey1")
+}
+
+fn display_sign_verify(client: &mut AzureVaultClient, key_name: &str, message: String){
+  let mut hasher = Sha512::new();
+  hasher.input_str(message.as_slice());
+  let hex = hasher.result_str().from_hex().unwrap();
+  println!("SHA512 Hash for '{:?}': {:?}\n", message, hex);
+  let signature = client.sign(key_name, hex.clone()).unwrap();
+  println!("Signature of hash: {:?}\n", signature);
+  let is_verified = client.verify(key_name, hex.clone(), signature.clone()).unwrap();
+  println!("is verified: {:?}\n", is_verified);
 }
 
 fn display_encrypt_decrypt(client: &mut AzureVaultClient, key_name: &str, message: String){

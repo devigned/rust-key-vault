@@ -17,6 +17,7 @@ log = "*"
 url = "*"
 regex = "*"
 rustc-serialize = "*"
+rust-crypto = "*"
 
 [dependencies.hyper]
 git = "https://github.com/hyperium/hyper.git"

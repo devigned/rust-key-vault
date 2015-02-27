@@ -12,9 +12,11 @@ use hyper::status::StatusCode;
 use url;
 
 use std::collections::BTreeMap;
+use std::cmp::PartialEq;
 
 use rustc_serialize::json;
-use rustc_serialize::base64::{ToBase64, URL_SAFE};
+use rustc_serialize::base64::{ToBase64, FromBase64, URL_SAFE};
+use rustc_serialize::Decodable;
 
 use http::authenticate_header::*;
 
@@ -141,12 +143,8 @@ impl<'a> AzureVaultClient<'a> {
         .replace("{vault_name}", vault_name)
         .replace("{key_name}", key_name);
       match operation {
-        Some("create") => {
-          let op_string = String::from_str("/") + operation.unwrap();
-          url.replace("{op}", op_string.as_slice())
-        },
         Some(op) => {
-          let op_string = String::from_str("/") + operation.unwrap();
+          let op_string = String::from_str("/") + op;
           url.replace("{op}", op_string.as_slice())
         },
         None => {
@@ -170,9 +168,11 @@ pub trait VaultClient<'a>: {
   fn create_key<'b>(&mut self, key_name: &str, key_ops: Vec<String>) -> hyper::HttpResult<KeyWrapper>;
   fn encrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>;
   fn decrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>;
-  fn wrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>;
-  fn unwrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>;
-  fn crypto_operation(&mut self, payload: BTreeMap<&str, String>, url: String) -> hyper::HttpResult<BTreeMap<String, String>>;
+  fn wrap<'b>(&mut self, key_name: &str, cek:  &[u8]) -> hyper::HttpResult<String>;
+  fn unwrap<'b>(&mut self, key_name: &str, cek:  &[u8]) -> hyper::HttpResult<String>;
+  fn sign<'b>(&mut self, key_name: &str, message:  Vec<u8>) -> hyper::HttpResult<Vec<u8>>;
+  fn verify<'b>(&mut self, key_name: &str, message:  Vec<u8>, signiture: Vec<u8>) -> hyper::HttpResult<bool>;
+  fn crypto_operation<T>(&mut self, payload: BTreeMap<&str, String>, url: String) -> hyper::HttpResult<BTreeMap<String, T>> where T : PartialEq + Decodable;
 }
 
 impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
@@ -297,12 +297,12 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
   fn encrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>{
     let url = AzureVaultClient::key_url(self.vault_name, key_name, Some("encrypt"));
-    let mut encrypt_payload = BTreeMap::new();
-    encrypt_payload.insert("alg", "RSA_OAEP".to_string());
-    encrypt_payload.insert("value", data.to_base64(URL_SAFE));
+    let mut payload = BTreeMap::new();
+    payload.insert("alg", "RSA_OAEP".to_string());
+    payload.insert("value", data.to_base64(URL_SAFE));
 
-    match self.crypto_operation(encrypt_payload, url){
-      Ok(mut map) => {
+    match self.crypto_operation::<String>(payload, url){
+      Ok(map) => {
         Ok(map.get("value").unwrap().clone())
       },
       Err(err) => Err(err)
@@ -311,27 +311,57 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
   fn decrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>{
     let url = AzureVaultClient::key_url(self.vault_name, key_name, Some("decrypt"));
-    let mut encrypt_payload = BTreeMap::new();
-    encrypt_payload.insert("alg", "RSA_OAEP".to_string());
-    encrypt_payload.insert("value", data.to_base64(URL_SAFE));
+    let mut payload = BTreeMap::new();
+    payload.insert("alg", "RSA_OAEP".to_string());
+    payload.insert("value", data.to_base64(URL_SAFE));
 
-    match self.crypto_operation(encrypt_payload, url){
-      Ok(mut map) => {
+    match self.crypto_operation::<String>(payload, url){
+      Ok(map) => {
         Ok(map.get("value").unwrap().clone())
       },
       Err(err) => Err(err)
     }
   }
 
-  fn wrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>{
+  fn wrap<'b>(&mut self, key_name: &str, cek:  &[u8]) -> hyper::HttpResult<String>{
     Ok(String::new())
   }
 
-  fn unwrap<'b>(&mut self, cek: String, key_name: &str) -> hyper::HttpResult<String>{
+  fn unwrap<'b>(&mut self, key_name: &str, cek:  &[u8]) -> hyper::HttpResult<String>{
     Ok(String::new())
   }
 
-  fn crypto_operation(&mut self, payload: BTreeMap<&str, String>, url: String) -> hyper::HttpResult<BTreeMap<String, String>>{
+  fn sign<'b>(&mut self, key_name: &str, digest: Vec<u8>) -> hyper::HttpResult<Vec<u8>>{
+    let url = AzureVaultClient::key_url(self.vault_name, key_name, Some("sign"));
+    let mut payload = BTreeMap::new();
+    payload.insert("alg", "RS512".to_string());
+    payload.insert("value", digest.to_base64(URL_SAFE));
+
+    match self.crypto_operation::<String>(payload, url){
+      Ok(map) => {
+        Ok(map.get("value").unwrap().from_base64().unwrap())
+      },
+      Err(err) => Err(err)
+    }
+  }
+
+  fn verify<'b>(&mut self, key_name: &str, digest: Vec<u8>, signiture: Vec<u8>) -> hyper::HttpResult<bool>{
+    let url = AzureVaultClient::key_url(self.vault_name, key_name, Some("verify"));
+    let mut payload = BTreeMap::new();
+    payload.insert("alg", "RS512".to_string());
+    payload.insert("digest", digest.to_base64(URL_SAFE));
+    payload.insert("value", signiture.to_base64(URL_SAFE));
+
+    match self.crypto_operation::<bool>(payload, url){
+      Ok(map) => {
+        Ok(map.get("value").unwrap().clone())
+      },
+      Err(err) => Err(err)
+    }
+  }
+
+  fn crypto_operation<T>(&mut self, payload: BTreeMap<&str, String>, url: String) -> hyper::HttpResult<BTreeMap<String, T>>
+      where T : PartialEq + Decodable{
     let url_str = url.as_slice();
     let request_body = json::encode(&payload).unwrap();
     let execute_create_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
@@ -355,7 +385,7 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
     match AzureVaultClient::execute_wrapper(self, execute_create_key) {
       Ok(mut res) => {
         let body = res.read_to_string().unwrap();
-        let json: BTreeMap<String, String> = json::decode(body.as_slice()).unwrap();
+        let json: BTreeMap<String, T> = json::decode(body.as_slice()).unwrap();
         Ok(json)
       },
       Err(err) => Err(err)
