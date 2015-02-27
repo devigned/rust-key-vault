@@ -77,15 +77,15 @@ fn display_key_by_name(client: &mut AzureVaultClient, key_name: &str){
 }
 
 fn delete_existing_key(client: &mut AzureVaultClient, key_name: &str){
-  let deleted_key = client.delete_key(key_name);
-  println!("Deleted Key with name: {:?}\n", key_name);
+  let deleted_key = client.delete_key(key_name).unwrap();
+  println!("Deleted Key with id: {:?}\n", deleted_key.key.kid);
 }
 
 fn insert_new_key(client: &mut AzureVaultClient, key_name: &str){
   let key_ops_vec = vec!["verify", "decrypt", "encrypt", "sign"];
   let key_ops = key_ops_vec.iter().map(|&op| String::from_str(op)).collect();
-  let create_key = client.create_key(key_name, key_ops);
-  println!("Created Key with name: {:?}\n", key_name);
+  let create_key = client.create_key(key_name, key_ops).unwrap();
+  println!("Created Key with id: {:?}\n", create_key.key.kid);
 }
 
 fn display_current_keys_list(client: &mut AzureVaultClient){

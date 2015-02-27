@@ -324,11 +324,11 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
   }
 
   fn wrap<'b>(&mut self, key_name: &str, cek:  &[u8]) -> hyper::HttpResult<String>{
-    Ok(String::new())
+    self.encrypt(key_name, cek)
   }
 
   fn unwrap<'b>(&mut self, key_name: &str, cek:  &[u8]) -> hyper::HttpResult<String>{
-    Ok(String::new())
+    self.decrypt(key_name, cek)
   }
 
   fn sign<'b>(&mut self, key_name: &str, digest: Vec<u8>) -> hyper::HttpResult<Vec<u8>>{
