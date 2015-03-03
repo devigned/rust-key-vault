@@ -1,8 +1,8 @@
-use vault::http::vault_client::AzureVaultClient;
-use vault::http::vault_client::VaultClient;
-
-fn setup() {
-}
+// use vault::http::vault_client::AzureVaultClient;
+// use vault::http::vault_client::VaultClient;
+//
+// fn setup() {
+// }
 //
 // test!(test_get_key {
 //   let mut client: AzureVaultClient = VaultClient::new("vault", "key", "secret");

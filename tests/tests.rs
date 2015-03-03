@@ -1,5 +1,3 @@
-#![feature(io)]
-
 extern crate vault;
 extern crate hyper;
 

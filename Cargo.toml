@@ -21,6 +21,7 @@ rust-crypto = "*"
 
 [dependencies.hyper]
 git = "https://github.com/hyperium/hyper.git"
+rev = "2ce4385c163e1a9a393c89743cf04e047b776e83"
 
 [[bin]]
 name = "vault"

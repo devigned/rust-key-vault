@@ -1,12 +1,7 @@
-use std::old_io::MemReader;
 use vault::http::authenticate_header::*;
 use hyper::header::{Headers};
 
 fn setup() {
-}
-
-fn mem(s: &str) -> MemReader {
-  MemReader::new(s.as_bytes().to_vec())
 }
 
 test!(test_raw_auth {
@@ -16,8 +11,8 @@ test!(test_raw_auth {
 });
 
 test!(test_raw_auth_parse {
-  let headers = Headers::from_raw(&mut mem("WWW-Authenticate: hello world\r\n\r\n")).unwrap();
-  assert_eq!(&headers.get::<WwwAuthenticate<String>>().unwrap().0[], "hello world");
+  let headers = Headers::from_raw(&mut b"WWW-Authenticate: hello world\r\n\r\n").unwrap();
+  assert_eq!(&headers.get::<WwwAuthenticate<String>>().unwrap().0[..], "hello world");
 });
 
 test!(test_basic_auth {
@@ -27,8 +22,8 @@ test!(test_basic_auth {
 });
 
 test!(test_basic_auth_parse {
-  let headers = Headers::from_raw(&mut mem("WWW-Authenticate: Bearer authorization=\"https://login.windows.net/123\", resource=\"https://vault.azure.net\"\r\n\r\n")).unwrap();
+  let headers = Headers::from_raw(&mut b"WWW-Authenticate: Bearer authorization=\"https://login.windows.net/123\", resource=\"https://vault.azure.net\"\r\n\r\n").unwrap();
   let auth = headers.get::<WwwAuthenticate<Bearer>>().unwrap();
-  assert_eq!(&auth.0.authorization[], "https://login.windows.net/123");
+  assert_eq!(&auth.0.authorization[..], "https://login.windows.net/123");
   assert_eq!(auth.0.resource, "https://vault.azure.net");
 });

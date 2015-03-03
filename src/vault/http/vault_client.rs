@@ -1,3 +1,5 @@
+// TODO: read for caching idea:
+// http://mainisusuallyafunction.blogspot.ru/2014/10/a-taste-of-rust-yum-for-cc-programmers_29.html
 
 use hyper;
 use hyper::client::{Client, Response};
@@ -13,6 +15,7 @@ use url;
 
 use std::collections::BTreeMap;
 use std::cmp::PartialEq;
+use std::io::Read;
 
 use rustc_serialize::json;
 use rustc_serialize::base64::{ToBase64, FromBase64, URL_SAFE};
@@ -84,7 +87,8 @@ impl<'a> AzureVaultClient<'a> {
             StatusCode::Unauthorized => {
               match AzureVaultClient::handle_401(vault_client, res) {
                 Ok(mut auth_res) => {
-                  let body = auth_res.read_to_string().unwrap();
+                  let mut body = String::new();
+                  auth_res.read_to_string(&mut body);
                   let token: AuthToken = json::decode(body.as_slice()).unwrap();
                   vault_client.auth_token = Some(token);
                   req_fn(&mut vault_client.client, vault_client.auth_token.clone())
@@ -189,7 +193,7 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
   fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
     let url_str = AzureVaultClient::key_url(self.vault_name, key_name, None);
     let url = url_str.as_slice();
-    let execute_get_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_get_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -202,7 +206,8 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
     match AzureVaultClient::execute_wrapper(self, execute_get_key) {
       Ok(mut res) => {
-        let body = res.read_to_string().unwrap();
+        let mut body = String::new();
+        res.read_to_string(&mut body);
         let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
         Ok(key)
       },
@@ -217,7 +222,7 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
   fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
     let url_str = AzureVaultClient::key_url(self.vault_name, key_name, None);
     let url = url_str.as_slice();
-    let execute_delete_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_delete_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -230,7 +235,8 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
     match AzureVaultClient::execute_wrapper(self, execute_delete_key) {
       Ok(mut res) => {
-        let body = res.read_to_string().unwrap();
+        let mut body = String::new();
+        res.read_to_string(&mut body);
         let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
         Ok(key)
       },
@@ -243,7 +249,7 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
     let url = url_str.as_slice();
     let create_key = CreateKey{kty: "RSA".to_string(), key_ops: key_ops, attributes: Attributes{enabled: Some(true), nbf: None, exp: None}};
     let request_body = json::encode(&create_key).unwrap();
-    let execute_create_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_create_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -263,7 +269,8 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
     match AzureVaultClient::execute_wrapper(self, execute_create_key) {
       Ok(mut res) => {
-        let body = res.read_to_string().unwrap();
+        let mut body = String::new();
+        res.read_to_string(&mut body);
         let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
         Ok(key)
       },
@@ -274,7 +281,7 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
   fn list<'b>(&mut self) -> hyper::HttpResult<Vec<KeyListItem>>{
     let url_str = AzureVaultClient::root_keys_url(self.vault_name);
     let url = url_str.as_slice();
-    let execute_list_keys = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_list_keys = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -287,7 +294,8 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
     match AzureVaultClient::execute_wrapper(self, execute_list_keys) {
       Ok(mut res) => {
-        let body = res.read_to_string().unwrap();
+        let mut body = String::new();
+        res.read_to_string(&mut body);
         let keys: Vec<KeyListItem> = json::decode(body.as_slice()).unwrap();
         Ok(keys)
       },
@@ -364,7 +372,7 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
       where T : PartialEq + Decodable{
     let url_str = url.as_slice();
     let request_body = json::encode(&payload).unwrap();
-    let execute_create_key = |&: client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_create_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -384,7 +392,8 @@ impl<'a> VaultClient<'a> for AzureVaultClient<'a> {
 
     match AzureVaultClient::execute_wrapper(self, execute_create_key) {
       Ok(mut res) => {
-        let body = res.read_to_string().unwrap();
+        let mut body = String::new();
+        res.read_to_string(&mut body);
         let json: BTreeMap<String, T> = json::decode(body.as_slice()).unwrap();
         Ok(json)
       },
