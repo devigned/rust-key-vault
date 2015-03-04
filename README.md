@@ -60,4 +60,4 @@ Returns the value of the secret
 Returns the names of the secrets in the vault
 
 ### Executing Key Operation Example
-From the project root run: `cargo run --example key_operations <vault_name> <key> <secret>``
+From the project root run: `cargo run --example key_operations <vault_name> <key> <secret>`
