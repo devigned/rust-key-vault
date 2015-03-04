@@ -58,3 +58,6 @@ Returns success or failure
 Returns the value of the secret
  - <b>List:</b> `> vault secrets list`
 Returns the names of the secrets in the vault
+
+### Executing Key Operation Example
+From the project root run: `cargo run --example key_operations <vault_name> <key> <secret>``
