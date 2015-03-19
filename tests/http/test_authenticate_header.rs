@@ -1,5 +1,6 @@
 use vault::http::authenticate_header::*;
-use hyper::header::{Headers};
+use hyper::header::{Headers, Header};
+
 
 fn setup() {
 }
@@ -11,8 +12,8 @@ test!(test_raw_auth {
 });
 
 test!(test_raw_auth_parse {
-  let headers = Headers::from_raw(&mut b"WWW-Authenticate: hello world\r\n\r\n").unwrap();
-  assert_eq!(&headers.get::<WwwAuthenticate<String>>().unwrap().0[..], "hello world");
+  let header: WwwAuthenticate<String> = Header::parse_header(&[b"hello world".to_vec()]).unwrap();
+  assert_eq!(header.0, "hello world");
 });
 
 test!(test_basic_auth {
@@ -22,8 +23,7 @@ test!(test_basic_auth {
 });
 
 test!(test_basic_auth_parse {
-  let headers = Headers::from_raw(&mut b"WWW-Authenticate: Bearer authorization=\"https://login.windows.net/123\", resource=\"https://vault.azure.net\"\r\n\r\n").unwrap();
-  let auth = headers.get::<WwwAuthenticate<Bearer>>().unwrap();
+  let auth: WwwAuthenticate<Bearer> = Header::parse_header(&[b"Bearer authorization=\"https://login.windows.net/123\", resource=\"https://vault.azure.net\"".to_vec()]).unwrap();
   assert_eq!(&auth.0.authorization[..], "https://login.windows.net/123");
   assert_eq!(auth.0.resource, "https://vault.azure.net");
 });

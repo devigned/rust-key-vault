@@ -1,6 +1,5 @@
 extern crate vault;
-extern crate hyper;
-
+#[macro_use] extern crate hyper;
 #[macro_use] extern crate log;
 
 mod support;

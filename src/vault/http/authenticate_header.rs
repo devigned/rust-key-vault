@@ -29,13 +29,18 @@ impl<S: Scheme + 'static> Header for WwwAuthenticate<S> where <S as FromStr>::Er
 
     fn parse_header(raw: &[Vec<u8>]) -> Option<WwwAuthenticate<S>> {
         if raw.len() == 1 {
-            match (from_utf8(unsafe { &raw[..].get_unchecked(0)[..] }), Scheme::scheme(None::<S>)) {
+            match (from_utf8(unsafe { &raw.get_unchecked(0)[..] }), Scheme::scheme(None::<S>)) {
                 (Ok(header), Some(scheme))
                     if header.starts_with(scheme) && header.len() > scheme.len() + 1 => {
-                    header[scheme.len() + 1..].parse::<S>().map(|s| WwwAuthenticate(s)).ok()
+                    header[scheme.len() + 1..].parse::<S>().map(WwwAuthenticate).ok()
                 },
-                (Ok(header), None) => header.parse::<S>().map(|s| WwwAuthenticate(s)).ok(),
-                _ => None
+                (Ok(header), None) => {
+                  header.parse::<S>().map(WwwAuthenticate).ok()
+                },
+                a => {
+                  println!("{:?}", a);
+                  None
+                }
             }
         } else {
             None

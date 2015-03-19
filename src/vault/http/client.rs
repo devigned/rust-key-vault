@@ -88,7 +88,7 @@ impl<'a> AzureVault<'a> {
               match AzureVault::handle_401(vault_client, res) {
                 Ok(mut auth_res) => {
                   let mut body = String::new();
-                  auth_res.read_to_string(&mut body);
+                  let _ = auth_res.read_to_string(&mut body);
                   let token: AuthToken = json::decode(body.as_slice()).unwrap();
                   vault_client.auth_token = Some(token);
                   req_fn(&mut vault_client.client, vault_client.auth_token.clone())
@@ -207,7 +207,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     match AzureVault::execute_wrapper(self, execute_get_key) {
       Ok(mut res) => {
         let mut body = String::new();
-        res.read_to_string(&mut body);
+        let _ = res.read_to_string(&mut body);
         let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
         Ok(key)
       },
@@ -236,7 +236,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     match AzureVault::execute_wrapper(self, execute_delete_key) {
       Ok(mut res) => {
         let mut body = String::new();
-        res.read_to_string(&mut body);
+        let _ = res.read_to_string(&mut body);
         let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
         Ok(key)
       },
@@ -270,7 +270,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     match AzureVault::execute_wrapper(self, execute_create_key) {
       Ok(mut res) => {
         let mut body = String::new();
-        res.read_to_string(&mut body);
+        let _ = res.read_to_string(&mut body);
         let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
         Ok(key)
       },
@@ -295,7 +295,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     match AzureVault::execute_wrapper(self, execute_list_keys) {
       Ok(mut res) => {
         let mut body = String::new();
-        res.read_to_string(&mut body);
+        let _ = res.read_to_string(&mut body);
         let keys: Vec<KeyListItem> = json::decode(body.as_slice()).unwrap();
         Ok(keys)
       },
@@ -393,7 +393,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     match AzureVault::execute_wrapper(self, execute_create_key) {
       Ok(mut res) => {
         let mut body = String::new();
-        res.read_to_string(&mut body);
+        let _ = res.read_to_string(&mut body);
         let json: T = json::decode(body.as_slice()).unwrap();
         Ok(json)
       },
