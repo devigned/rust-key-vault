@@ -89,7 +89,7 @@ impl<'a> AzureVault<'a> {
                 Ok(mut auth_res) => {
                   let mut body = String::new();
                   let _ = auth_res.read_to_string(&mut body);
-                  let token: AuthToken = json::decode(body.as_slice()).unwrap();
+                  let token: AuthToken = json::decode(body.as_ref()).unwrap();
                   vault_client.auth_token = Some(token);
                   req_fn(&mut vault_client.client, vault_client.auth_token.clone())
                 },
@@ -109,8 +109,8 @@ impl<'a> AzureVault<'a> {
         Some(header) => {
           let mut auth_url = header.0.authorization.clone();
           auth_url.push_str("/oauth2/token");
-          let resource = header.0.resource.as_slice();
-          AzureVault::authenticate(&mut vault_client.client, auth_url.as_slice(), resource, vault_client.key, vault_client.secret)
+          let resource = header.0.resource.as_ref();
+          AzureVault::authenticate(&mut vault_client.client, auth_url.as_ref(), resource, vault_client.key, vault_client.secret)
         },
         None => panic!("401 with no WWW-Authenticate header!")
       }
@@ -136,9 +136,10 @@ impl<'a> AzureVault<'a> {
         req_headers.set_raw(static_key, vec![value.as_bytes().to_vec()])
       }
 
+      let hyper_body: &str = post_body.as_ref();
       client.request(method, url)
         .headers(req_headers)
-        .body(post_body.as_slice())
+        .body(hyper_body)
         .send()
     }
 
@@ -149,7 +150,7 @@ impl<'a> AzureVault<'a> {
       match operation {
         Some(op) => {
           let op_string = String::from_str("/") + op;
-          url.replace("{op}", op_string.as_slice())
+          url.replace("{op}", op_string.as_ref())
         },
         None => {
           url.replace("{op}", "")
@@ -192,7 +193,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
 
   fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
     let url_str = AzureVault::key_url(self.vault_name, key_name, None);
-    let url = url_str.as_slice();
+    let url: &str = url_str.as_ref();
     let execute_get_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
@@ -208,7 +209,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
       Ok(mut res) => {
         let mut body = String::new();
         let _ = res.read_to_string(&mut body);
-        let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
+        let key: KeyWrapper = json::decode(body.as_ref()).unwrap();
         Ok(key)
       },
       Err(err) => Err(err)
@@ -221,7 +222,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
 
   fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
     let url_str = AzureVault::key_url(self.vault_name, key_name, None);
-    let url = url_str.as_slice();
+    let url: &str = url_str.as_ref();
     let execute_delete_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
@@ -237,7 +238,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
       Ok(mut res) => {
         let mut body = String::new();
         let _ = res.read_to_string(&mut body);
-        let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
+        let key: KeyWrapper = json::decode(body.as_ref()).unwrap();
         Ok(key)
       },
       Err(err) => Err(err)
@@ -246,7 +247,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
 
   fn create_key<'b>(&mut self, key_name: &str, key_ops: Vec<String>) -> hyper::HttpResult<KeyWrapper>{
     let url_str = AzureVault::key_url(self.vault_name, key_name, Some("create"));
-    let url = url_str.as_slice();
+    let url: &str = url_str.as_ref();
     let create_key = CreateKey{kty: "RSA".to_string(), key_ops: key_ops, attributes: Attributes{enabled: Some(true), nbf: None, exp: None}};
     let request_body = json::encode(&create_key).unwrap();
     let execute_create_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
@@ -256,13 +257,15 @@ impl<'a> Vault<'a> for AzureVault<'a> {
           let json_mime: Mime = "application/json".parse().unwrap();
           req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
           req_headers.set(ContentType(json_mime));
-          client.post(url).headers(req_headers).body(request_body.as_slice()).send()
+          let body: &str = request_body.as_ref();
+          client.post(url).headers(req_headers).body(body).send()
         },
         None => {
           let mut req_headers = hyper::header::Headers::new();
           let json_mime: Mime = "application/json".parse().unwrap();
           req_headers.set(ContentType(json_mime));
-          client.post(url).headers(req_headers).body(request_body.as_slice()).send()
+          let body: &str = request_body.as_ref();
+          client.post(url).headers(req_headers).body(body).send()
         }
       }
     };
@@ -271,7 +274,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
       Ok(mut res) => {
         let mut body = String::new();
         let _ = res.read_to_string(&mut body);
-        let key: KeyWrapper = json::decode(body.as_slice()).unwrap();
+        let key: KeyWrapper = json::decode(body.as_ref()).unwrap();
         Ok(key)
       },
       Err(err) => Err(err)
@@ -280,7 +283,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
 
   fn list<'b>(&mut self) -> hyper::HttpResult<Vec<KeyListItem>>{
     let url_str = AzureVault::root_keys_url(self.vault_name);
-    let url = url_str.as_slice();
+    let url: &str = url_str.as_ref();
     let execute_list_keys = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
@@ -296,7 +299,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
       Ok(mut res) => {
         let mut body = String::new();
         let _ = res.read_to_string(&mut body);
-        let keys: Vec<KeyListItem> = json::decode(body.as_slice()).unwrap();
+        let keys: Vec<KeyListItem> = json::decode(body.as_ref()).unwrap();
         Ok(keys)
       },
       Err(err) => Err(err)
@@ -370,7 +373,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
 
   fn crypto_operation<T>(&mut self, payload: BTreeMap<&str, String>, url: String) -> hyper::HttpResult<T>
       where T : PartialEq + Decodable{
-    let url_str = url.as_slice();
+    let url_str = url.as_ref();
     let request_body = json::encode(&payload).unwrap();
     let execute_create_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
       match auth_token {
@@ -379,13 +382,15 @@ impl<'a> Vault<'a> for AzureVault<'a> {
           let json_mime: Mime = "application/json".parse().unwrap();
           req_headers.set(Authorization(BearerToken { token: token.access_token.clone() }));
           req_headers.set(ContentType(json_mime));
-          client.post(url_str).headers(req_headers).body(request_body.as_slice()).send()
+          let hyper_body: &str = request_body.as_ref();
+          client.post(url_str).headers(req_headers).body(hyper_body).send()
         },
         None => {
           let mut req_headers = hyper::header::Headers::new();
           let json_mime: Mime = "application/json".parse().unwrap();
           req_headers.set(ContentType(json_mime));
-          client.post(url_str).headers(req_headers).body(request_body.as_slice()).send()
+          let hyper_body: &str = request_body.as_ref();
+          client.post(url_str).headers(req_headers).body(hyper_body).send()
         }
       }
     };
@@ -394,7 +399,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
       Ok(mut res) => {
         let mut body = String::new();
         let _ = res.read_to_string(&mut body);
-        let json: T = json::decode(body.as_slice()).unwrap();
+        let json: T = json::decode(body.as_ref()).unwrap();
         Ok(json)
       },
       Err(err) => Err(err)

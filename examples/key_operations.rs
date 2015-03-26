@@ -1,7 +1,7 @@
 #![feature(collections)]
 extern crate vault;
 extern crate crypto;
-extern crate "rustc-serialize" as rustc_serialize;
+extern crate rustc_serialize;
 
 use std::env;
 

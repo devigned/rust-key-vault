@@ -99,9 +99,9 @@ impl Scheme for Bearer {
 
     fn fmt_scheme(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut text = String::from_str("authorization=\"");
-        text.push_str(self.authorization.as_slice());
+        text.push_str(self.authorization.as_ref());
         text.push_str("\", resource=\"");
-        text.push_str(self.resource.as_slice());
+        text.push_str(self.resource.as_ref());
         text.push('"');
         write!(f, "{}", text)
     }

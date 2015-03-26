@@ -17,8 +17,10 @@ log = "*"
 url = "*"
 regex = "*"
 rustc-serialize = "*"
-rust-crypto = "*"
 hyper = "*"
+
+[dependencies.rust-crypto]
+git = "https://github.com/DaGenix/rust-crypto.git"
 
 [[bin]]
 name = "vault"
