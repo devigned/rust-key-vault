@@ -30,7 +30,7 @@ fn main() {
     delete_existing_key(&mut client, "mynewkey1");
 
     display_current_keys_list(&mut client);
-    
+
     insert_new_key(&mut client, "mynewkey1");
 
     display_encrypt_decrypt(&mut client, "mynewkey1", "Hello World!".to_string());
@@ -76,18 +76,19 @@ fn display_encrypt_decrypt(client: &mut AzureVault, key_name: &str, message: Str
 fn display_key_by_name(client: &mut AzureVault, key_name: &str){
     let mykey = client.get_key(key_name);
     match mykey {
-      Ok(key) => {
-        println!("Found Key {:?} with Payload: {:?}\n", key_name, key);
-      },
-      Err(err) => {
-        println!("error: {:?}", err);
-      }
+      Ok(Some(key)) =>  println!("Found Key {:?} with Payload: {:?}\n", key_name, key),
+      Ok(None) =>          println!("Didn't find Key {:?}\n", key_name),
+      Err(err) =>       println!("error: {:?}", err)
     }
 }
 
 fn delete_existing_key(client: &mut AzureVault, key_name: &str){
-    let deleted_key = client.delete_key(key_name).unwrap();
-    println!("Deleted Key with id: {:?}\n", deleted_key.key.kid);
+    let deleted_key_result = client.delete_key(key_name);
+    match deleted_key_result {
+        Ok(Some(deleted_key)) =>    println!("Deleted Key with id: {:?}\n", deleted_key.key.kid),
+        Ok(None) =>                 println!("Didn't find Key {:?}\n", key_name),
+        Err(err) =>                 println!("error: {:?}", err)
+    }
 }
 
 fn insert_new_key(client: &mut AzureVault, key_name: &str){
@@ -100,11 +101,8 @@ fn insert_new_key(client: &mut AzureVault, key_name: &str){
 fn display_current_keys_list(client: &mut AzureVault){
     let list = client.list();
     match list {
-      Ok(keys) => {
-        println!("Current Key List: {:?}\n", keys);
-      },
-      Err(err) => {
-        println!("error: {:?}", err);
-      }
+      Ok(Some(keys)) =>  println!("Current Key List: {:?}\n", keys),
+      Ok(None) =>       println!("No key list was returned..."),
+      Err(err) =>       println!("error: {:?}", err)
     }
 }

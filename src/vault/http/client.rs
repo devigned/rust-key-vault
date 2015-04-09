@@ -39,13 +39,13 @@ struct AuthToken {
 }
 
 // Azure Key Vault asymmetric key representation
-#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq)]
 pub struct KeyWrapper {
   pub key: Key,
   pub attributes: Attributes,
 }
 
-#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq)]
 pub struct Key {
   pub kid: String,
   pub kty: String,
@@ -54,13 +54,13 @@ pub struct Key {
   pub key_ops: Vec<String>,
 }
 
-#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq)]
 pub struct KeyListItem {
   pub kid: String,
   attributes: Attributes
 }
 
-#[derive(RustcEncodable, RustcDecodable, Debug, Clone)]
+#[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq)]
 struct CreateKey {
   kty: String,
   key_ops: Vec<String>,
@@ -95,8 +95,6 @@ impl<'a> AzureVault<'a> {
                     let _ = auth_res.read_to_string(&mut body);
                     match auth_res.status.class() {
                         StatusClass::Success => {
-                            println!("Response: {}", auth_res.status);
-                            println!("Headers:\n{}", auth_res.headers);
                             let decode_result: DecodeResult<AuthToken> = json::decode(body.as_ref());
                             match decode_result {
                                 Ok(token) => {
@@ -176,14 +174,33 @@ impl<'a> AzureVault<'a> {
     fn root_keys_url<'b>(vault_name: &str) -> String{
         format!("https://{}.vault.azure.net/keys?api-version=2014-12-08-preview", vault_name)
     }
+
+    fn handle_response<T>(mut response: Response, fail_on_404: bool) -> Option<T> where T : PartialEq + Decodable {
+        match response.status.to_u16() {
+           100...299 => {
+            let mut body = String::new();
+            let _ = response.read_to_string(&mut body);
+            let obj_result: DecodeResult<T> = json::decode(body.as_ref());
+            match obj_result {
+                Ok(obj) => Some(obj),
+                Err(err) => panic!(err)
+            }
+          },
+          404 => match fail_on_404 {
+                    true => panic!("Error:: Status: {}", response.status),
+                    false => None
+                },
+          _ => panic!("Error:: Status: {}", response.status)
+        }
+    }
 }
 
 pub trait Vault<'a>: {
   fn new(vault_name: &'a str, key: &'a str, secret: &'a str) -> Self;
-  fn list<'b>(&mut self) -> hyper::HttpResult<Vec<KeyListItem>>;
-  fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>;
+  fn list<'b>(&mut self) -> hyper::HttpResult<Option<Vec<KeyListItem>>>;
+  fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<Option<KeyWrapper>>;
   fn update_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>;
-  fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>;
+  fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<Option<KeyWrapper>>;
   fn create_key<'b>(&mut self, key_name: &str, key_ops: Vec<String>) -> hyper::HttpResult<KeyWrapper>;
   fn encrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>;
   fn decrypt<'b>(&mut self, key_name: &str, data: &[u8]) -> hyper::HttpResult<String>;
@@ -205,7 +222,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     }
   }
 
-  fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
+  fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<Option<KeyWrapper>>{
     let url_str = AzureVault::key_url(self.vault_name, key_name, None);
     let url: &str = url_str.as_ref();
     let execute_get_key = |client: &mut Client, auth_token: Option<AuthToken>| {
@@ -220,21 +237,17 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     };
 
     match AzureVault::execute_wrapper(self, execute_get_key) {
-      Ok(mut res) => {
-        let mut body = String::new();
-        let _ = res.read_to_string(&mut body);
-        let key: KeyWrapper = json::decode(body.as_ref()).unwrap();
-        Ok(key)
-      },
-      Err(err) => Err(err)
+        Ok(response) => Ok(AzureVault::handle_response::<KeyWrapper>(response, false)),
+        Err(err) => Err(err)
     }
+
   }
 
   fn update_key<'b>(&mut self, key: KeyWrapper) -> hyper::HttpResult<KeyWrapper>{
     Ok(key)
   }
 
-  fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
+  fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<Option<KeyWrapper>>{
     let url_str = AzureVault::key_url(self.vault_name, key_name, None);
     let url: &str = url_str.as_ref();
     let execute_delete_key = |client: &mut Client, auth_token: Option<AuthToken>| {
@@ -249,13 +262,8 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     };
 
     match AzureVault::execute_wrapper(self, execute_delete_key) {
-      Ok(mut res) => {
-        let mut body = String::new();
-        let _ = res.read_to_string(&mut body);
-        let key: KeyWrapper = json::decode(body.as_ref()).unwrap();
-        Ok(key)
-      },
-      Err(err) => Err(err)
+        Ok(response) => Ok(AzureVault::handle_response::<KeyWrapper>(response, false)),
+        Err(err) => Err(err)
     }
   }
 
@@ -285,17 +293,12 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     };
 
     match AzureVault::execute_wrapper(self, execute_create_key) {
-      Ok(mut res) => {
-        let mut body = String::new();
-        let _ = res.read_to_string(&mut body);
-        let key: KeyWrapper = json::decode(body.as_ref()).unwrap();
-        Ok(key)
-      },
-      Err(err) => Err(err)
+        Ok(response) => Ok(AzureVault::handle_response::<KeyWrapper>(response, true).unwrap()),
+        Err(err) => Err(err)
     }
   }
 
-  fn list<'b>(&mut self) -> hyper::HttpResult<Vec<KeyListItem>>{
+  fn list<'b>(&mut self) -> hyper::HttpResult<Option<Vec<KeyListItem>>>{
     let url_str = AzureVault::root_keys_url(self.vault_name);
     let url: &str = url_str.as_ref();
     let execute_list_keys = |client: &mut Client, auth_token: Option<AuthToken>| {
@@ -310,13 +313,8 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     };
 
     match AzureVault::execute_wrapper(self, execute_list_keys) {
-      Ok(mut res) => {
-        let mut body = String::new();
-        let _ = res.read_to_string(&mut body);
-        let keys: Vec<KeyListItem> = json::decode(body.as_ref()).unwrap();
-        Ok(keys)
-      },
-      Err(err) => Err(err)
+        Ok(response) => Ok(AzureVault::handle_response::<Vec<KeyListItem>>(response, false)),
+        Err(err) => Err(err)
     }
   }
 
@@ -413,8 +411,15 @@ impl<'a> Vault<'a> for AzureVault<'a> {
       Ok(mut res) => {
         let mut body = String::new();
         let _ = res.read_to_string(&mut body);
-        let json: T = json::decode(body.as_ref()).unwrap();
-        Ok(json)
+        let obj_result: DecodeResult<T> = json::decode(body.as_ref());
+        match obj_result {
+            Ok(obj) => Ok(obj),
+            Err(err) => {
+                println!("body: {:?}\n", body);
+                println!("status: {:?}\n", res.status);
+                panic!(err);
+            }
+        }
       },
       Err(err) => Err(err)
     }
