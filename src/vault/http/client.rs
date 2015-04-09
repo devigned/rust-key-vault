@@ -3,21 +3,25 @@
 
 use hyper;
 use hyper::client::{Client, Response};
-use hyper::mime::*;
 use hyper::header::{Authorization, ContentType};
 use hyper::HttpError;
 use hyper::method::Method;
 use hyper::method::Method::{Post};
-use hyper::net::{HttpConnector};
-use hyper::status::StatusCode;
+use hyper::mime::*;
+use hyper::status::{StatusCode, StatusClass};
 
 use url;
 
 use std::collections::BTreeMap;
 use std::cmp::PartialEq;
-use std::io::Read;
+use std::error::Error;
+use std::io::Error as IoError;
+use std::io::ErrorKind;
+use std::io::{Read};
+use std::string::String;
 
 use rustc_serialize::json;
+use rustc_serialize::json::DecodeResult;
 use rustc_serialize::base64::{ToBase64, FromBase64, URL_SAFE};
 use rustc_serialize::Decodable;
 
@@ -71,7 +75,7 @@ pub struct Attributes {
 }
 
 pub struct AzureVault<'a>{
-  client: Client<HttpConnector<'a>>,
+  client: Client,
   vault_name: &'a str,
   key: &'a str,
   secret: &'a str,
@@ -80,18 +84,32 @@ pub struct AzureVault<'a>{
 
 impl<'a> AzureVault<'a> {
 
-    fn execute_wrapper<F: Fn(&mut Client<HttpConnector>, Option<AuthToken>) -> hyper::HttpResult<Response>>(vault_client: &mut AzureVault, req_fn: F) -> hyper::HttpResult<Response>{
+    fn execute_wrapper<F: Fn(&mut Client, Option<AuthToken>) -> hyper::HttpResult<Response>>(vault_client: &mut AzureVault, req_fn: F) -> hyper::HttpResult<Response>{
       match req_fn(&mut vault_client.client, vault_client.auth_token.clone()) {
         Ok(res) => {
           match res.status {
             StatusCode::Unauthorized => {
               match AzureVault::handle_401(vault_client, res) {
                 Ok(mut auth_res) => {
-                  let mut body = String::new();
-                  let _ = auth_res.read_to_string(&mut body);
-                  let token: AuthToken = json::decode(body.as_ref()).unwrap();
-                  vault_client.auth_token = Some(token);
-                  req_fn(&mut vault_client.client, vault_client.auth_token.clone())
+                    let mut body = String::new();
+                    let _ = auth_res.read_to_string(&mut body);
+                    match auth_res.status.class() {
+                        StatusClass::Success => {
+                            println!("Response: {}", auth_res.status);
+                            println!("Headers:\n{}", auth_res.headers);
+                            let decode_result: DecodeResult<AuthToken> = json::decode(body.as_ref());
+                            match decode_result {
+                                Ok(token) => {
+                                    vault_client.auth_token = Some(token);
+                                    req_fn(&mut vault_client.client, vault_client.auth_token.clone())
+                                },
+                                Err(err) => {
+                                    Err(HttpError::from(IoError::new(ErrorKind::Other, err.description())))
+                                }
+                            }
+                        },
+                        _ => Err(HttpError::from(IoError::new(ErrorKind::Other, &format!("Status: {} :: Response: {}", auth_res.status, body)[..])))
+                    }
                 },
                 Err(err) => Err(err)
               }
@@ -116,7 +134,7 @@ impl<'a> AzureVault<'a> {
       }
     }
 
-    fn authenticate(client: &mut Client<HttpConnector>, auth_url: &str, resource: &str, key: &str, secret: &str) -> hyper::HttpResult<Response> {
+    fn authenticate(client: &mut Client, auth_url: &str, resource: &str, key: &str, secret: &str) -> hyper::HttpResult<Response> {
       let parmas = vec![("client_id", key),
                         ("client_secret", secret),
                         ("resource", resource),
@@ -125,7 +143,7 @@ impl<'a> AzureVault<'a> {
       AzureVault::pstar_with_params(client, Method::Post, auth_url, parmas.into_iter(), headers.into_iter())
     }
 
-    fn pstar_with_params<I, J>(client: &mut Client<HttpConnector>, method: Method, url: &str, params: I, headers: J) -> Result<Response, HttpError>
+    fn pstar_with_params<I, J>(client: &mut Client, method: Method, url: &str, params: I, headers: J) -> Result<Response, HttpError>
                           where I: Iterator<Item = (&'a str, &'a str)>,
                                 J: Iterator<Item = (&'static str, &'a str)>{
       let mut req_headers = hyper::header::Headers::new();
@@ -144,23 +162,19 @@ impl<'a> AzureVault<'a> {
     }
 
     fn key_url<'b>(vault_name: &str, key_name: &str, operation: Option<&str>) -> String{
-      let url = String::from_str("https://{vault_name}.vault.azure.net/keys/{key_name}{op}?api-version=2014-12-08-preview")
-        .replace("{vault_name}", vault_name)
-        .replace("{key_name}", key_name);
-      match operation {
-        Some(op) => {
-          let op_string = String::from_str("/") + op;
-          url.replace("{op}", op_string.as_ref())
-        },
-        None => {
-          url.replace("{op}", "")
-        }
-      }
+      let op_string = match operation {
+          Some(op) => {
+            format!("/{}", op)
+          },
+          None => {
+            format!{""}
+          }
+      };
+      format!("https://{}.vault.azure.net/keys/{}{}?api-version=2014-12-08-preview", vault_name, key_name, op_string)
     }
 
     fn root_keys_url<'b>(vault_name: &str) -> String{
-      String::from_str("https://{vault_name}.vault.azure.net/keys?api-version=2014-12-08-preview")
-        .replace("{vault_name}", vault_name)
+        format!("https://{}.vault.azure.net/keys?api-version=2014-12-08-preview", vault_name)
     }
 }
 
@@ -194,7 +208,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
   fn get_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
     let url_str = AzureVault::key_url(self.vault_name, key_name, None);
     let url: &str = url_str.as_ref();
-    let execute_get_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_get_key = |client: &mut Client, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -223,7 +237,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
   fn delete_key<'b>(&mut self, key_name: &str) -> hyper::HttpResult<KeyWrapper>{
     let url_str = AzureVault::key_url(self.vault_name, key_name, None);
     let url: &str = url_str.as_ref();
-    let execute_delete_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_delete_key = |client: &mut Client, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -250,7 +264,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
     let url: &str = url_str.as_ref();
     let create_key = CreateKey{kty: "RSA".to_string(), key_ops: key_ops, attributes: Attributes{enabled: Some(true), nbf: None, exp: None}};
     let request_body = json::encode(&create_key).unwrap();
-    let execute_create_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_create_key = |client: &mut Client, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -284,7 +298,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
   fn list<'b>(&mut self) -> hyper::HttpResult<Vec<KeyListItem>>{
     let url_str = AzureVault::root_keys_url(self.vault_name);
     let url: &str = url_str.as_ref();
-    let execute_list_keys = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_list_keys = |client: &mut Client, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();
@@ -375,7 +389,7 @@ impl<'a> Vault<'a> for AzureVault<'a> {
       where T : PartialEq + Decodable{
     let url_str = url.as_ref();
     let request_body = json::encode(&payload).unwrap();
-    let execute_create_key = |client: &mut Client<HttpConnector>, auth_token: Option<AuthToken>| {
+    let execute_create_key = |client: &mut Client, auth_token: Option<AuthToken>| {
       match auth_token {
         Some(token) => {
           let mut req_headers = hyper::header::Headers::new();

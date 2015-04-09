@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::fmt;
 use std::str::{FromStr, from_utf8};
 use std::ops::{Deref, DerefMut};
@@ -22,14 +23,14 @@ impl<S: Scheme> DerefMut for WwwAuthenticate<S> {
     }
 }
 
-impl<S: Scheme + 'static> Header for WwwAuthenticate<S> where <S as FromStr>::Err: 'static{
+impl<S: Scheme + Any> Header for WwwAuthenticate<S> where <S as FromStr>::Err: 'static{
     fn header_name() -> &'static str {
         "WWW-Authenticate"
     }
 
     fn parse_header(raw: &[Vec<u8>]) -> Option<WwwAuthenticate<S>> {
         if raw.len() == 1 {
-            match (from_utf8(unsafe { &raw.get_unchecked(0)[..] }), Scheme::scheme(None::<S>)) {
+            match (from_utf8(unsafe { &raw.get_unchecked(0)[..] }), <S as Scheme>::scheme()) {
                 (Ok(header), Some(scheme))
                     if header.starts_with(scheme) && header.len() > scheme.len() + 1 => {
                     header[scheme.len() + 1..].parse::<S>().map(WwwAuthenticate).ok()
@@ -48,9 +49,9 @@ impl<S: Scheme + 'static> Header for WwwAuthenticate<S> where <S as FromStr>::Er
     }
 }
 
-impl<S: Scheme+ 'static> HeaderFormat for WwwAuthenticate<S> where <S as FromStr>::Err: 'static {
+impl<S: Scheme + Any> HeaderFormat for WwwAuthenticate<S> where <S as FromStr>::Err: 'static {
     fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match Scheme::scheme(None::<S>) {
+        match <S as Scheme>::scheme() {
             Some(scheme) => try!(write!(fmt, "{} ", scheme)),
             None => ()
         };
@@ -67,7 +68,7 @@ pub struct BearerToken {
 }
 
 impl Scheme for BearerToken {
-  fn scheme(_: Option<BearerToken>) -> Option<&'static str> {
+  fn scheme() -> Option<&'static str> {
     Some("Bearer")
   }
 
@@ -93,12 +94,12 @@ pub struct Bearer {
 }
 
 impl Scheme for Bearer {
-    fn scheme(_: Option<Bearer>) -> Option<&'static str> {
+    fn scheme() -> Option<&'static str> {
         Some("Bearer")
     }
 
     fn fmt_scheme(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut text = String::from_str("authorization=\"");
+        let mut text = format!("authorization=\"");
         text.push_str(self.authorization.as_ref());
         text.push_str("\", resource=\"");
         text.push_str(self.resource.as_ref());

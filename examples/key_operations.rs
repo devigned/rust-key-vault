@@ -1,4 +1,3 @@
-#![feature(collections)]
 extern crate vault;
 extern crate crypto;
 extern crate rustc_serialize;
@@ -31,7 +30,7 @@ fn main() {
     delete_existing_key(&mut client, "mynewkey1");
 
     display_current_keys_list(&mut client);
-
+    
     insert_new_key(&mut client, "mynewkey1");
 
     display_encrypt_decrypt(&mut client, "mynewkey1", "Hello World!".to_string());
@@ -93,7 +92,7 @@ fn delete_existing_key(client: &mut AzureVault, key_name: &str){
 
 fn insert_new_key(client: &mut AzureVault, key_name: &str){
     let key_ops_vec = vec!["verify", "decrypt", "encrypt", "sign"];
-    let key_ops = key_ops_vec.iter().map(|&op| String::from_str(op)).collect();
+    let key_ops = key_ops_vec.iter().map(|&op| format!("{}", op)).collect();
     let create_key = client.create_key(key_name, key_ops).unwrap();
     println!("Created Key with id: {:?}\n", create_key.key.kid);
 }
