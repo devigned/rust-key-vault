@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/devigned/rust-key-vault.svg?branch=master)](https://travis-ci.org/devigned/rust-key-vault)
 # Rust Key Vault
-A C compatible Rust library and command line interface with all of the features provided by the Key Vault REST API
+A Rust library and command line interface with all of the features provided by the Key Vault REST API
 
 ## Project Status
 The library is at proof of concept state. Right now, it will only authenticate against Azure Active Directory via OAuth2 and request an asymmetric key from a specified vault. There is much work to be done.
@@ -61,3 +61,52 @@ Returns the names of the secrets in the vault
 
 ### Executing Key Operation Example
 From the project root run: `cargo run --example key_operations <vault_name> <key> <secret>`
+
+## Installation
+
+- Clone the repo
+- Run `cargo build`
+- Run `cargo test`
+
+## Usage
+
+See the key_operations example:
+```rust
+fn main() {
+    let mut vault = String::new();
+    let mut key = String::new();
+    let mut secret = String::new();
+
+    get_arg(1, &mut vault);
+    get_arg(2, &mut key);
+    get_arg(3, &mut secret);
+
+    println!("vault: {:?}, key: {:?}, secret: {:?}", vault, key, secret);
+
+    let mut client: AzureVault = Vault::new(&vault[..], &key[..], &secret[..]);
+
+    display_current_keys_list(&mut client);
+
+    delete_existing_key(&mut client, "mynewkey1");
+
+    display_current_keys_list(&mut client);
+
+    insert_new_key(&mut client, "mynewkey1");
+
+    display_encrypt_decrypt(&mut client, "mynewkey1", "Hello World!".to_string());
+
+    display_sign_verify(&mut client, "mynewkey1", "Hello World!".to_string());
+
+    display_current_keys_list(&mut client);
+
+    display_key_by_name(&mut client, "mynewkey1")
+}
+```
+
+## Contributing
+
+1. Fork it ( https://github.com/devigned/rust-key-vault/fork )
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin my-new-feature`)
+5. Create a new Pull Request
